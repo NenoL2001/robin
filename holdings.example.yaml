@@ -1,0 +1,11 @@
+holdings:
+  - symbol: INTC
+    name: Intel
+    asset_type: equity
+    quantity: 10
+    avg_cost: 25.0
+  - symbol: POET
+    name: POET Technologies
+    asset_type: equity
+    quantity: 100
+    avg_cost: 3.5

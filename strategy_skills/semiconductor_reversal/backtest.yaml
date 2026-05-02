@@ -1,0 +1,4 @@
+min_trades: 8
+max_drawdown_limit: -0.35
+paper_trading_min_days: 14
+slippage_bps: 10

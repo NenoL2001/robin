@@ -1,0 +1,37 @@
+analysts:
+  - handle: example_semiconductor_analyst
+    focus:
+      - semiconductors
+      - ai infrastructure
+    credibility: 0.6
+    high_noise: true
+keywords:
+  - semiconductor
+  - silicon photonics
+  - AI capex
+  - AI compute
+  - data center
+  - foundry
+  - wafer
+  - packaging
+  - HBM
+  - test equipment
+cashtags:
+  - INTC
+  - AXTI
+  - AEHR
+  - POET
+macro_topics:
+  ai_compute:
+    - AI compute
+    - training cluster
+  semiconductor_chain:
+    - HBM
+    - advanced packaging
+macro_topic_symbols:
+  ai_compute:
+    - NVDA
+    - AMD
+  semiconductor_chain:
+    - POET
+    - AEHR

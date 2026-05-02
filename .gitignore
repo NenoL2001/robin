@@ -1,0 +1,16 @@
+.env
+.portfolio_bot/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+holdings.yaml
+analysts.yaml
+config.yaml
+strategy_skills/*/memory.jsonl
+strategy_skills/*/review_memory.jsonl
+system_skills/*/review_memory.jsonl

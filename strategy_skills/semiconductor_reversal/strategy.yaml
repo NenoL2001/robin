@@ -1,0 +1,121 @@
+name: semiconductor_reversal
+version: 1.0.0
+status: active
+description: Mines and validates semiconductor reversal factors using current portfolio exposure, autonomous strategy evidence search, news, X analyst evidence, AI compute read-through, price action, and chain context.
+data_sources:
+  - quotes
+  - company_news
+  - daily_news_summary
+  - strategy_news_scout
+  - strategy_evidence
+  - event_observation
+  - symbol_relationship
+  - web_evidence
+  - x_recent_posts
+  - feature_bundle
+  - current_holdings
+  - paper_positions
+  - factor_spec
+  - factor_weight_update
+calculation:
+  module: portfolio_bot.strategies.semiconductor_reversal
+  class: SemiconductorReversalStrategy
+metric_ops:
+  - quote
+  - behavior
+  - exposure
+  - news
+  - strategy_evidence
+  - event_observation
+  - sentiment
+  - chain_exposure
+  - ai_compute_readthrough
+  - factor_iteration
+universe_examples:
+  - INTC
+  - AXTI
+  - AEHR
+  - POET
+  - SNXX
+  - SNDK
+  - NVDA
+  - AMD
+  - AVGO
+  - TSM
+option_profile:
+  min_days: 180
+  max_days: 548
+  max_premium: 1500
+score_fields:
+  - factor_breakdown
+  - bull_case
+  - bear_case
+  - catalysts
+  - valuation_gap
+  - option_quality
+  - risk_flags
+  - confidence
+factor_mining:
+  portfolio_context: true
+  autonomous_research:
+    enabled: true
+    max_queries_per_review: 8
+    official_sources_first: true
+    secondary_search_on_gap: true
+    symbol_aliases:
+      SNXX:
+        underlying: SNDK
+        leverage: 2.0
+        aliases:
+          - Sandisk
+          - High Bandwidth Flash
+          - HBF
+          - BiCS8
+          - NBM
+          - Stargate
+    source_priority:
+      - investor_relations
+      - sec_filings
+      - company_pdf
+      - earnings_transcript
+      - major_financial_media
+      - industry_media
+      - social_clues
+  daily_factor_iteration: true
+  candidate_factors:
+    - intraday_followthrough
+    - large_move_reversal_risk
+    - position_crowding_pressure
+    - volume_confirmation
+    - underlying_relation_strength
+    - earnings_surprise
+    - guidance_revision
+    - datacenter_mix_shift
+    - contracted_revenue_visibility
+    - product_roadmap_acceleration
+    - hbf_ai_inference_moat
+    - official_source_strength
+    - sell_the_news_volatility
+  x_analyst_context:
+    serenity_handle: aleabitoreddit
+    leopold_handle: leopoldasch
+    macro_topics:
+      - ai_compute
+      - ai_capex
+      - data_center_power
+      - export_controls
+      - semiconductor_chain
+  require_factor_breakdown: true
+  require_query_log_before_missing_news_claim: true
+  paper_execution:
+    allowed_actions:
+      - paper_buy
+      - paper_sell
+    real_trading: blocked
+    require_risk_gate: true
+    merge_exposure_symbols:
+      SNXX: SNDK
+  validation_defaults:
+    min_trades: 8
+    paper_trading_min_days: 14
+    include_transaction_costs: true

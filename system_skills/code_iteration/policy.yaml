@@ -1,0 +1,42 @@
+name: code_iteration
+version: 1.0.0
+status: active
+max_unattended_scope: bounded_strategy_auto_active
+auto_source_edits: true
+auto_strategy_activation: true
+daily_budget:
+  profile_iterations: 2
+  test_timeout_seconds: 180
+proposal_rules:
+  require_profile_evidence: true
+  require_test_status: true
+  require_rollback_notes: true
+  require_agent_review: true
+  allow_auto_code_edit: true
+  allow_strategy_candidate_creation: true
+  allow_strategy_auto_active: true
+  max_files_changed: 3
+  max_patch_lines: 250
+strategy_activation_gates:
+  require_py_compile: true
+  require_pytest: true
+  require_strategy_dry_run: true
+  min_backtest_trades: 8
+  max_backtest_drawdown: -0.35
+blocked_paths:
+  - .env
+  - launchd/
+  - holdings.yaml
+  - config.yaml
+blocked_changes:
+  - real_broker_trading
+  - credential_handling
+  - notification_recipient
+  - paid_data_dependency
+priorities:
+  - correctness
+  - safety
+  - rate_limit_reduction
+  - observability
+  - performance_hotpath
+  - architecture_simplification
