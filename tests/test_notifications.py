@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from portfolio_bot.config import load_config
-from portfolio_bot.notifications import AgentMailNotifier, IMessageNotifier, allow_notification_send, dedupe_repeated_lines, select_notifiers, split_message
+from portfolio_bot.notifications import AgentMailNotifier, IMessageNotifier, allow_notification_send, dedupe_repeated_lines, semantic_notification_key, select_notifiers, split_message
 
 
 def test_split_message_keeps_short_message_intact():
@@ -72,3 +72,10 @@ notifications:
     ]
 
     assert allowed == [True, True, True, False]
+
+
+def test_semantic_notification_key_collapses_repriced_same_event():
+    first = semantic_notification_key("email", "Portfolio daily report", "SNXX moved +15.45% to $116.99 after SNDK earnings.")
+    second = semantic_notification_key("email", "Portfolio daily report", "SNXX moved +15.10% to $115.20 after SNDK earnings.")
+
+    assert first == second

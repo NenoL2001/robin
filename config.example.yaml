@@ -59,6 +59,7 @@ notifications:
   agentmail_off_hours_cooldown_minutes: 45
   agentmail_off_hours_extreme_move_percent: 8.0
   batch_realtime_alerts: true
+  semantic_dedupe_enabled: true
   dry_run: false
 
 llm:
@@ -108,6 +109,29 @@ strategy_lab:
   daily_factor_iteration_enabled: true
   allow_new_factor_candidates: true
   min_factor_observations_for_orders: 20
+
+market_bars:
+  enabled: true
+  sqlite_path: market_bars.sqlite
+  default_windows:
+    - 1d
+    - 5d
+    - 20d
+
+relation_graph:
+  enabled: true
+  sqlite_path: relation_graph.sqlite
+  min_confidence: 0.55
+
+evidence_ranker:
+  max_items_per_symbol: 5
+
+report_verifier:
+  enabled: true
+  block_on_wrong_date: true
+
+report:
+  max_sync_seconds: 30
 
 runtime:
   sqlite_path: runtime.sqlite

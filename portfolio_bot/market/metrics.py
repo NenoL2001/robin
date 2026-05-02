@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from ..models import FeatureBundle, Holding, NewsItem, Quote
 from ..runtime import RuntimeStore
+from .bars import BarSnapshot, BarStore
 from .exposures import leveraged_exposure
 
 
@@ -116,6 +117,7 @@ class MetricInput:
     quote: Quote | None
     news: list[NewsItem]
     exposure: dict[str, Any]
+    bars: list[BarSnapshot] = field(default_factory=list)
     partials: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
@@ -162,12 +164,23 @@ class BehaviorOp(MetricOp):
     def run_symbol(self, item: MetricInput) -> dict[str, Any]:
         quote = item.quote
         exposure = dict(item.exposure or {})
-        change = float(quote.change_percent) if quote and quote.change_percent is not None else 0.0
-        price = float(quote.price) if quote else 0.0
-        previous_close = float(quote.previous_close) if quote and quote.previous_close else 0.0
+        bars = sorted(item.bars or [], key=lambda bar: bar.timestamp, reverse=True)
+        latest_bar = bars[0] if bars else None
+        previous_bar = bars[1] if len(bars) > 1 else None
+        price = float(latest_bar.close) if latest_bar and latest_bar.close else (float(quote.price) if quote else 0.0)
+        previous_close = (
+            float(previous_bar.close)
+            if previous_bar and previous_bar.close
+            else (float(quote.previous_close) if quote and quote.previous_close else (float(latest_bar.open) if latest_bar and latest_bar.open else 0.0))
+        )
+        if latest_bar and previous_close > 0 and price > 0:
+            change = ((price / previous_close) - 1.0) * 100.0
+        else:
+            change = float(quote.change_percent) if quote and quote.change_percent is not None else 0.0
         gap = ((price / previous_close) - 1.0) * 100.0 if price > 0 and previous_close > 0 else 0.0
-        volume = int(quote.volume or 0) if quote else 0
+        volume = int(latest_bar.volume or 0) if latest_bar else (int(quote.volume or 0) if quote else 0)
         market_value = float(exposure.get("market_value") or 0.0)
+        bar_metrics = bar_behavior_metrics(bars)
 
         followthrough = bounded(change * 0.75, -8.0, 8.0)
         if change > 12:
@@ -192,8 +205,15 @@ class BehaviorOp(MetricOp):
             flags.append("large_existing_position")
         if volume <= 0:
             flags.append("missing_volume_confirmation")
+        if not bars:
+            flags.append("history_missing")
+        if bar_metrics.get("large_move_reversal_risk"):
+            flags.append("large_move_reversal_risk")
+        if bar_metrics.get("new_high_breakout"):
+            flags.append("new_high_breakout")
 
         return {
+            **bar_metrics,
             "intraday_return_pct": round(change, 3),
             "abs_intraday_return_pct": round(abs(change), 3),
             "gap_from_previous_close_pct": round(gap, 3),
@@ -291,8 +311,10 @@ class MetricPipeline:
         quotes: dict[str, Quote | None],
         news_by_symbol: dict[str, list[NewsItem]],
         exposure_by_symbol_map: dict[str, dict[str, Any]],
+        bars_by_symbol: dict[str, list[BarSnapshot]] | None = None,
     ) -> dict[str, dict[str, dict[str, Any]]]:
         symbols = [symbol.upper() for symbol in symbols if symbol]
+        bars_by_symbol = bars_by_symbol or {}
         partials: dict[str, dict[str, dict[str, Any]]] = {symbol: {} for symbol in symbols}
         for spec in self.op_specs:
             op = build_metric_op(spec.name)
@@ -302,6 +324,7 @@ class MetricPipeline:
                     quote=quotes.get(symbol) or quotes.get(symbol.upper()),
                     news=news_by_symbol.get(symbol, []),
                     exposure=exposure_by_symbol_map.get(symbol, {}),
+                    bars=bars_by_symbol.get(symbol, []),
                     partials=partials[symbol],
                 )
                 for symbol in symbols
@@ -356,11 +379,13 @@ class MetricService:
         backend: MetricBackend = "sync",
         max_workers: int = 4,
         op_specs: list[MetricOpSpec] | None = None,
+        bar_store: BarStore | None = None,
     ):
         self.runtime = runtime
         self.backend = normalize_backend(backend)
         self.max_workers = max(1, int(max_workers or 1))
         self.op_specs = op_specs or DEFAULT_OP_SPECS
+        self.bar_store = bar_store
 
     def compute_many(
         self,
@@ -375,8 +400,9 @@ class MetricService:
         normalized = [symbol.upper() for symbol in symbols if symbol]
         by_symbol = news_by_symbol(news, normalized)
         exposure_map = exposure_by_symbol(holdings or [])
+        bars_by_symbol = self.bar_store.latest_by_symbol(normalized, window="1d", limit=30) if self.bar_store else {}
         pipeline = MetricPipeline(self.op_specs, backend=backend or self.backend, max_workers=self.max_workers)
-        partials = pipeline.run(normalized, quotes, by_symbol, exposure_map)
+        partials = pipeline.run(normalized, quotes, by_symbol, exposure_map, bars_by_symbol)
         bundles = {symbol: bundle_from_partials(symbol, partials[symbol]) for symbol in normalized}
         if commit:
             for symbol, bundle in bundles.items():
@@ -445,6 +471,61 @@ def bundle_from_partials(symbol: str, partials: dict[str, dict[str, Any]]) -> Fe
 
 def bounded(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
+
+
+def bar_behavior_metrics(bars: list[BarSnapshot]) -> dict[str, Any]:
+    bars = sorted(bars or [], key=lambda bar: bar.timestamp, reverse=True)
+    if not bars:
+        return {
+            "history_missing": True,
+            "history_bar_count": 0,
+            "return_1d": 0.0,
+            "return_3d": 0.0,
+            "return_5d": 0.0,
+            "return_20d": 0.0,
+            "relative_volume": 0.0,
+            "open_gap_pct": 0.0,
+            "close_location_value": 0.5,
+            "vwap_distance_pct": 0.0,
+            "new_high_breakout": False,
+            "large_move_reversal_risk": False,
+        }
+    latest = bars[0]
+    latest_close = float(latest.close or 0.0)
+    previous = bars[1] if len(bars) > 1 else None
+    previous_close = float(previous.close or 0.0) if previous else 0.0
+    high = float(latest.high or latest_close or 0.0)
+    low = float(latest.low or latest_close or 0.0)
+    open_price = float(latest.open or previous_close or latest_close or 0.0)
+    prior_volumes = [float(bar.volume or 0.0) for bar in bars[1:21] if float(bar.volume or 0.0) > 0]
+    average_volume = sum(prior_volumes) / len(prior_volumes) if prior_volumes else 0.0
+    latest_volume = float(latest.volume or 0.0)
+    approx_vwap = (high + low + latest_close) / 3.0 if high > 0 and low > 0 and latest_close > 0 else 0.0
+    highs_20 = [float(bar.high or bar.close or 0.0) for bar in bars[:20]]
+    return {
+        "history_missing": False,
+        "history_bar_count": len(bars),
+        "return_1d": round(bar_return_since(latest_close, bars, 1), 3),
+        "return_3d": round(bar_return_since(latest_close, bars, 3), 3),
+        "return_5d": round(bar_return_since(latest_close, bars, 5), 3),
+        "return_20d": round(bar_return_since(latest_close, bars, 20), 3),
+        "relative_volume": round(latest_volume / average_volume, 3) if latest_volume > 0 and average_volume > 0 else 0.0,
+        "open_gap_pct": round(((open_price / previous_close) - 1.0) * 100.0, 3) if open_price > 0 and previous_close > 0 else 0.0,
+        "close_location_value": round((latest_close - low) / (high - low), 3) if high > low and latest_close > 0 else 0.5,
+        "vwap_distance_pct": round(((latest_close / approx_vwap) - 1.0) * 100.0, 3) if latest_close > 0 and approx_vwap > 0 else 0.0,
+        "new_high_breakout": bool(latest_close > 0 and highs_20 and latest_close >= max(highs_20)),
+        "large_move_reversal_risk": bool(bar_return_since(latest_close, bars, 1) >= 10.0 and high > low and (latest_close - low) / (high - low) < 0.45),
+    }
+
+
+def bar_return_since(latest_close: float, bars: list[BarSnapshot], days: int) -> float:
+    if latest_close <= 0 or len(bars) <= 1:
+        return 0.0
+    index = min(max(1, int(days)), len(bars) - 1)
+    base = float(bars[index].close or 0.0)
+    if base <= 0:
+        return 0.0
+    return ((latest_close / base) - 1.0) * 100.0
 
 
 def news_by_symbol(news: list[NewsItem], symbols: list[str]) -> dict[str, list[NewsItem]]:

@@ -27,10 +27,10 @@ class MemorySynthesizer:
         limit: int = 8,
     ) -> MemoryBundle:
         symbols = [symbol.upper() for symbol in (symbols or []) if symbol]
-        factual = self._records(["real_position_snapshot", "market_event", "news_lead", "daily_news_summary", "web_evidence", "strategy_evidence", "event_observation", "factor_spec", "factor_observation", "factor_weight_update", "symbol_relationship", "signal", "strategy_signal", "risk_gate_verdict", "paper_order_proposal", "paper_order_job"], query, symbols, limit)
+        factual = self._records(["real_position_snapshot", "market_event", "bar_snapshot", "news_lead", "daily_news_summary", "web_evidence", "ranked_evidence", "strategy_evidence", "event_observation", "factor_spec", "factor_observation", "factor_weight_update", "factor_attribution", "symbol_relationship", "signal", "strategy_signal", "risk_gate_verdict", "paper_order_proposal", "paper_order_job"], query, symbols, limit)
         episodic = self._agent_runs(limit=limit)
         procedural = self._procedural(strategy=strategy, limit=limit)
-        reflective = self._records(["daily_review", "strategy_lesson", "strategy_roundtable", "source_config_change", "agent_reflection", "missed_evidence_lesson", "research_gap"], query, symbols, limit)
+        reflective = self._records(["daily_review", "strategy_lesson", "strategy_roundtable", "source_config_change", "agent_reflection", "missed_evidence_lesson", "missed_signal_review", "report_verification", "research_gap"], query, symbols, limit)
         warnings = stale_warnings(factual + reflective)
         bundle = MemoryBundle(query=query, factual=factual, episodic=episodic, procedural=procedural, reflective=reflective, stale_warnings=warnings)
         if run_id is not None:

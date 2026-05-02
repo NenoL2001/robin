@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import smtplib
 import subprocess
 from dataclasses import dataclass
@@ -250,19 +251,88 @@ def allow_notification_send(
     max_repeats: int = MAX_NOTIFICATION_REPEATS,
     window: timedelta = NOTIFICATION_REPEAT_WINDOW,
 ) -> bool:
-    normalized = "\n".join(
-        [
-            str(channel or "").strip().lower(),
-            " ".join(str(subject or "").split()).strip().lower(),
-            " ".join(str(body or "").split()).strip().lower(),
-        ]
-    )
-    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    if getattr(config.notifications, "semantic_dedupe_enabled", True):
+        digest = semantic_notification_key(channel, subject, body)
+    else:
+        normalized = "\n".join(
+            [
+                str(channel or "").strip().lower(),
+                " ".join(str(subject or "").split()).strip().lower(),
+                " ".join(str(body or "").split()).strip().lower(),
+            ]
+        )
+        digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     try:
         runtime = RuntimeStore(runtime_path(config.data_dir, config.runtime.sqlite_path))
         return runtime.check_and_touch_repeat_limit(f"notification:{digest}", window, max_repeats, commit=True)
     except Exception:
         return True
+
+
+def semantic_notification_key(channel: str, subject: str, body: str) -> str:
+    subject_text = " ".join(str(subject or "").split())
+    body_text = " ".join(str(body or "").split())
+    combined = f"{subject_text} {body_text}"
+    symbols = sorted(extract_notification_symbols(combined))
+    event_type = infer_notification_event_type(subject_text, body_text)
+    normalized = normalize_notification_summary(body_text or subject_text)
+    payload = "\n".join(
+        [
+            str(channel or "").strip().lower(),
+            ",".join(symbols[:12]),
+            event_type,
+            normalized[:1000],
+        ]
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def extract_notification_symbols(text: str) -> set[str]:
+    stopwords = {
+        "THE",
+        "AND",
+        "FOR",
+        "WITH",
+        "THIS",
+        "THAT",
+        "FROM",
+        "NEWS",
+        "REPORT",
+        "DAILY",
+        "PORTFOLIO",
+        "BOT",
+        "ETF",
+        "API",
+        "LLM",
+    }
+    symbols = set()
+    for raw in re.findall(r"(?<![A-Za-z0-9])\$?([A-Z][A-Z0-9]{1,5})(?![A-Za-z0-9])", text or ""):
+        if raw not in stopwords:
+            symbols.add(raw)
+    return symbols
+
+
+def infer_notification_event_type(subject: str, body: str) -> str:
+    text = f"{subject} {body}".lower()
+    if "日报" in subject or "daily" in text or "report" in text:
+        return "daily_report"
+    if "paper" in text or "纸面订单" in text or "模拟" in text:
+        return "paper_order"
+    if "strategy" in text or "策略" in text or "signal" in text or "信号" in text:
+        return "strategy_signal"
+    if "news" in text or "新闻" in text or "digest" in text:
+        return "news_digest"
+    if re.search(r"[+-]\s*\d+(\.\d+)?%", text):
+        return "major_move"
+    return "generic"
+
+
+def normalize_notification_summary(text: str) -> str:
+    value = str(text or "").lower()
+    value = re.sub(r"https?://\S+", " URL ", value)
+    value = re.sub(r"\$?\d+(?:,\d{3})*(?:\.\d+)?%?", " NUM ", value)
+    value = re.sub(r"\b20\d{2}-\d{2}-\d{2}\b", " DATE ", value)
+    return " ".join(value.split())
 
 
 def select_notifiers(notifiers: list[Notifier], subject: str, body: str) -> list[Notifier]:

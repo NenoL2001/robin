@@ -4,6 +4,7 @@ from typing import Any
 
 from ..models import Holding, NewsItem, Quote
 from ..runtime import RuntimeStore
+from .bars import BarStore
 from .metrics import MetricService
 
 
@@ -11,9 +12,9 @@ FeatureSnapshot = dict[str, Any]
 
 
 class FeatureEngine:
-    def __init__(self, runtime: RuntimeStore, *, backend: str = "sync", max_workers: int = 4):
+    def __init__(self, runtime: RuntimeStore, *, backend: str = "sync", max_workers: int = 4, bar_store: BarStore | None = None):
         self.runtime = runtime
-        self.metrics = MetricService(runtime, backend=backend, max_workers=max_workers)
+        self.metrics = MetricService(runtime, backend=backend, max_workers=max_workers, bar_store=bar_store)
 
     def compute_many(
         self,

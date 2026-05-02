@@ -66,6 +66,7 @@ class NotificationConfig:
     agentmail_off_hours_cooldown_minutes: int = 45
     agentmail_off_hours_extreme_move_percent: float = 8.0
     batch_realtime_alerts: bool = True
+    semantic_dedupe_enabled: bool = True
     dry_run: bool = False
 
 
@@ -121,6 +122,36 @@ class StrategyLabConfig:
     daily_factor_iteration_enabled: bool = True
     allow_new_factor_candidates: bool = True
     min_factor_observations_for_orders: int = 20
+
+
+@dataclass(slots=True)
+class MarketBarsConfig:
+    enabled: bool = True
+    sqlite_path: str = "market_bars.sqlite"
+    default_windows: list[str] = field(default_factory=lambda: ["1d", "5d", "20d"])
+
+
+@dataclass(slots=True)
+class RelationGraphConfig:
+    enabled: bool = True
+    sqlite_path: str = "relation_graph.sqlite"
+    min_confidence: float = 0.55
+
+
+@dataclass(slots=True)
+class EvidenceRankerConfig:
+    max_items_per_symbol: int = 5
+
+
+@dataclass(slots=True)
+class ReportVerifierConfig:
+    enabled: bool = True
+    block_on_wrong_date: bool = True
+
+
+@dataclass(slots=True)
+class ReportConfig:
+    max_sync_seconds: int = 30
 
 
 @dataclass(slots=True)
@@ -241,6 +272,11 @@ class BotConfig:
     strategy_risk: StrategyRiskConfig = field(default_factory=StrategyRiskConfig)
     strategy_research: StrategyResearchConfig = field(default_factory=StrategyResearchConfig)
     strategy_lab: StrategyLabConfig = field(default_factory=StrategyLabConfig)
+    market_bars: MarketBarsConfig = field(default_factory=MarketBarsConfig)
+    relation_graph: RelationGraphConfig = field(default_factory=RelationGraphConfig)
+    evidence_ranker: EvidenceRankerConfig = field(default_factory=EvidenceRankerConfig)
+    report_verifier: ReportVerifierConfig = field(default_factory=ReportVerifierConfig)
+    report: ReportConfig = field(default_factory=ReportConfig)
     runtime: RuntimeConfig = field(default_factory=RuntimeConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     health: HealthConfig = field(default_factory=HealthConfig)
@@ -305,6 +341,11 @@ def load_config(path: str | Path = "config.yaml") -> BotConfig:
     strategy_risk_raw = raw.get("strategy_risk", {})
     strategy_research_raw = raw.get("strategy_research", {})
     strategy_lab_raw = raw.get("strategy_lab", {})
+    market_bars_raw = raw.get("market_bars", {})
+    relation_graph_raw = raw.get("relation_graph", {})
+    evidence_ranker_raw = raw.get("evidence_ranker", {})
+    report_verifier_raw = raw.get("report_verifier", {})
+    report_raw = raw.get("report", {})
     runtime_raw = raw.get("runtime", {})
     logging_raw = raw.get("logging", {})
     health_raw = raw.get("health", {})
@@ -352,6 +393,7 @@ def load_config(path: str | Path = "config.yaml") -> BotConfig:
         agentmail_off_hours_cooldown_minutes=int(notifications_raw.get("agentmail_off_hours_cooldown_minutes", 45)),
         agentmail_off_hours_extreme_move_percent=float(notifications_raw.get("agentmail_off_hours_extreme_move_percent", 8.0)),
         batch_realtime_alerts=bool(notifications_raw.get("batch_realtime_alerts", True)),
+        semantic_dedupe_enabled=bool(notifications_raw.get("semantic_dedupe_enabled", True)),
         dry_run=bool(notifications_raw.get("dry_run", False)),
     )
     memory = MemoryConfig(
@@ -396,6 +438,24 @@ def load_config(path: str | Path = "config.yaml") -> BotConfig:
         allow_new_factor_candidates=bool(strategy_lab_raw.get("allow_new_factor_candidates", True)),
         min_factor_observations_for_orders=int(strategy_lab_raw.get("min_factor_observations_for_orders", 20)),
     )
+    market_bars = MarketBarsConfig(
+        enabled=bool(market_bars_raw.get("enabled", True)),
+        sqlite_path=str(market_bars_raw.get("sqlite_path", "market_bars.sqlite")),
+        default_windows=[str(value) for value in market_bars_raw.get("default_windows", ["1d", "5d", "20d"])],
+    )
+    relation_graph = RelationGraphConfig(
+        enabled=bool(relation_graph_raw.get("enabled", True)),
+        sqlite_path=str(relation_graph_raw.get("sqlite_path", "relation_graph.sqlite")),
+        min_confidence=float(relation_graph_raw.get("min_confidence", 0.55)),
+    )
+    evidence_ranker = EvidenceRankerConfig(
+        max_items_per_symbol=int(evidence_ranker_raw.get("max_items_per_symbol", 5)),
+    )
+    report_verifier = ReportVerifierConfig(
+        enabled=bool(report_verifier_raw.get("enabled", True)),
+        block_on_wrong_date=bool(report_verifier_raw.get("block_on_wrong_date", True)),
+    )
+    report = ReportConfig(max_sync_seconds=int(report_raw.get("max_sync_seconds", 30)))
     runtime = RuntimeConfig(sqlite_path=str(runtime_raw.get("sqlite_path", "runtime.sqlite")))
     logging = LoggingConfig(
         enabled=bool(logging_raw.get("enabled", True)),
@@ -483,6 +543,11 @@ def load_config(path: str | Path = "config.yaml") -> BotConfig:
         strategy_risk=strategy_risk,
         strategy_research=strategy_research,
         strategy_lab=strategy_lab,
+        market_bars=market_bars,
+        relation_graph=relation_graph,
+        evidence_ranker=evidence_ranker,
+        report_verifier=report_verifier,
+        report=report,
         runtime=runtime,
         logging=logging,
         health=health,

@@ -82,6 +82,27 @@ def main(argv: list[str] | None = None) -> None:
     factor_iter_p = sub.add_parser("factor-iterate-now")
     factor_iter_p.add_argument("--dry-run", action="store_true")
 
+    bars_refresh_p = sub.add_parser("bars-refresh-now")
+    bars_refresh_p.add_argument("--symbols", nargs="*", default=[])
+    bars_refresh_p.add_argument("--dry-run", action="store_true")
+
+    relation_discover_p = sub.add_parser("relation-discover-now")
+    relation_discover_p.add_argument("--symbols", nargs="*", default=[])
+    relation_discover_p.add_argument("--dry-run", action="store_true")
+
+    evidence_rank_p = sub.add_parser("evidence-rank-now")
+    evidence_rank_p.add_argument("--symbols", nargs="*", default=[])
+    evidence_rank_p.add_argument("--days", type=int, default=5)
+    evidence_rank_p.add_argument("--dry-run", action="store_true")
+
+    report_verify_p = sub.add_parser("report-verify-now")
+    report_verify_p.add_argument("--latest", action="store_true")
+    report_verify_p.add_argument("--dry-run", action="store_true")
+
+    factor_attr_p = sub.add_parser("factor-attribution-now")
+    factor_attr_p.add_argument("--horizon", choices=["1d", "3d", "5d"], default="1d")
+    factor_attr_p.add_argument("--dry-run", action="store_true")
+
     strategy_iter_p = sub.add_parser("strategy-iterate-now")
     strategy_iter_p.add_argument("--symbols", nargs="*", default=[])
     strategy_iter_p.add_argument("--dry-run", action="store_true")
@@ -295,6 +316,42 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "factor-iterate-now":
         result = ResearchEngine(config).iterate_strategy_factors(dry_run=args.dry_run)
         print(result.summary)
+    elif args.command == "bars-refresh-now":
+        holdings = load_holdings(config.holdings_path)
+        symbols = args.symbols or sorted(research_symbols_for_cli(holdings) | set(config.research.default_universe))
+        result = ResearchEngine(config).refresh_bars(symbols, dry_run=args.dry_run)
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    elif args.command == "relation-discover-now":
+        holdings = load_holdings(config.holdings_path)
+        symbols = args.symbols or sorted(research_symbols_for_cli(holdings) | set(config.research.default_universe))
+        result = ResearchEngine(config).discover_relations(symbols, dry_run=args.dry_run)
+        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+    elif args.command == "evidence-rank-now":
+        holdings = load_holdings(config.holdings_path)
+        symbols = args.symbols or sorted(research_symbols_for_cli(holdings) | set(config.research.default_universe))
+        engine = ResearchEngine(config)
+        digest = engine.generate_daily_digest(symbols, days=args.days, dry_run=args.dry_run, include_web=not args.dry_run)
+        ranked = engine.evidence_ranker.rank_news(digest.items, symbols, commit=not args.dry_run)
+        print(json.dumps([item.to_dict() for item in ranked], ensure_ascii=False, indent=2, default=str))
+    elif args.command == "report-verify-now":
+        engine = ResearchEngine(config)
+        holdings = load_holdings(config.holdings_path)
+        memory = memory_store(config)
+        recent = memory.recent(kind="daily_review", limit=1)
+        if not recent:
+            print("no latest daily_review memory found")
+        else:
+            symbols = [part.strip().upper() for part in (recent[0].symbol or "").split(",") if part.strip()]
+            relationships = engine.relation_graph.relationships_for(symbols, min_confidence=config.relation_graph.min_confidence) if engine.relation_graph else []
+            result = engine.report_verifier.verify(recent[0].content, holdings, relationships, query_log=[], commit=not args.dry_run)
+            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str))
+    elif args.command == "factor-attribution-now":
+        engine = ResearchEngine(config)
+        symbols = engine.factor_attribution.symbols_with_open_attribution(horizon=args.horizon)
+        quotes = engine.data_hub.quotes(symbols, commit=not args.dry_run) if symbols else {}
+        updated = 0 if args.dry_run else engine.factor_attribution.update_forward_returns(quotes, horizon=args.horizon, remember=True)
+        summary = engine.factor_attribution.summary(horizon=args.horizon, min_observations=1)
+        print(json.dumps({"horizon": args.horizon, "symbols": symbols, "updated": updated, "summary": [item.to_dict() for item in summary]}, ensure_ascii=False, indent=2, default=str))
     elif args.command == "strategy-iterate-now":
         engine = ResearchEngine(config)
         factor_result = engine.iterate_strategy_factors(dry_run=args.dry_run)
@@ -439,11 +496,14 @@ def main(argv: list[str] | None = None) -> None:
             print(json.dumps(row, ensure_ascii=False, indent=2))
     elif args.command == "features-compute":
         symbols = [symbol.upper() for symbol in args.symbols]
-        hub = DataHub(config)
+        engine = ResearchEngine(config)
+        hub = engine.data_hub
         quotes = hub.quotes(symbols, commit=not args.dry_run)
+        if engine.bar_store:
+            engine.bar_store.refresh_from_quotes(quotes, commit=not args.dry_run)
         news = hub.collect_news(symbols, commit=not args.dry_run)
         backend = args.backend or config.metrics.backend
-        features = FeatureEngine(runtime_store(config), backend=backend, max_workers=config.metrics.max_workers).compute_many(
+        features = FeatureEngine(runtime_store(config), backend=backend, max_workers=config.metrics.max_workers, bar_store=engine.bar_store).compute_many(
             symbols,
             quotes,
             news,

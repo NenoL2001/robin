@@ -9,17 +9,22 @@ from ..config import BotConfig
 from ..backtest import BacktestStore, format_backtest_result
 from .data_hub import DataHub
 from .daily_digest import DailyNewsDigestBuilder, dedupe_news_items
+from .bars import BarStore
 from ..data.finnhub import FinnhubClient
 from ..data.tradier import TradierClient
 from ..data.x_api import XApiClient
+from .evidence_ranker import EvidenceRanker
 from .features import FeatureEngine
 from ..models import Holding, NewsItem, OptionCandidate, PaperOrderProposal, Quote, RiskGateVerdict, StrategyScore, StrategySignal
 from ..memory import MemoryStore, OpenSourceMemoryBridge, memory_path
 from ..openai_client import OpenAIService
 from ..paper import PaperBroker
 from ..runtime import RuntimeStore, runtime_path
+from .relations import RelationGraph, StoredSymbolRelation, static_symbol_relations, stored_relation_from_scout
+from .report_verifier import ReportVerifier, fallback_verified_report
 from ..storage import Storage, load_analyst_config, load_holdings
 from ..strategies.registry import load_strategies, load_strategy_infos
+from ..strategies.factor_attribution import FactorAttributionStore
 from ..strategies.risk_gate import RiskGateContext, StrategyRiskGate
 from .exposures import LEVERAGED_EXPOSURES, expand_leveraged_symbols, leveraged_exposure
 from .metrics import news_relevance, symbol_matches_text
@@ -49,7 +54,12 @@ class ResearchEngine:
         self.strategies = load_strategies(config.strategy_root, config.research, holdings=self.current_holdings)
         self.memory = MemoryStore(memory_path(config.data_dir, config.memory.sqlite_path), enabled=config.memory.enabled)
         self.runtime = RuntimeStore(runtime_path(config.data_dir, config.runtime.sqlite_path))
-        self.features = FeatureEngine(self.runtime, backend=config.metrics.backend, max_workers=config.metrics.max_workers)
+        self.bar_store = BarStore.from_config(config, memory=self.memory) if config.market_bars.enabled else None
+        self.relation_graph = RelationGraph.from_config(config, memory=self.memory) if config.relation_graph.enabled else None
+        self.evidence_ranker = EvidenceRanker(config, memory=self.memory)
+        self.report_verifier = ReportVerifier(config, memory=self.memory)
+        self.factor_attribution = FactorAttributionStore.from_config(config, memory=self.memory)
+        self.features = FeatureEngine(self.runtime, backend=config.metrics.backend, max_workers=config.metrics.max_workers, bar_store=self.bar_store)
         self.open_memory = OpenSourceMemoryBridge(config.memory.open_source_enabled, config.memory.open_source_backend)
         self.paper = PaperBroker(config.data_dir / config.paper.sqlite_path, config.paper.starting_cash, memory=self.memory)
         self.backtests = BacktestStore(config.data_dir / config.backtest.sqlite_path, memory=self.memory)
@@ -162,6 +172,27 @@ class ResearchEngine:
             include_web = not dry_run
         return DailyNewsDigestBuilder(self.config, data_hub=self.data_hub, runtime=self.runtime, memory=self.memory).build(symbols, days=days, commit=not dry_run, include_web=include_web)
 
+    def refresh_bars(self, symbols: list[str], *, dry_run: bool = False) -> dict[str, object]:
+        normalized = sorted({_normalize_research_symbol(symbol) for symbol in symbols if symbol})
+        if not self.bar_store:
+            return {"enabled": False, "symbols": normalized, "count": 0}
+        quotes = self.data_hub.quotes(normalized, commit=not dry_run)
+        bars = self.bar_store.refresh_from_quotes(quotes, commit=not dry_run)
+        return {"enabled": True, "symbols": normalized, "count": len(bars), "bars": [bar.to_dict() for bar in bars.values()]}
+
+    def discover_relations(self, symbols: list[str], *, dry_run: bool = False) -> dict[str, object]:
+        normalized = sorted({_normalize_research_symbol(symbol) for symbol in symbols if symbol})
+        scout = self.scout_strategy_news(normalized, dry_run=dry_run, deep=True)
+        stored = self.relation_graph.upsert_many_from_scout(scout.relationships, remember=not dry_run) if self.relation_graph and not dry_run else []
+        preview = [stored_relation_from_scout(item) for item in scout.relationships] if self.relation_graph and dry_run else []
+        static = self.relation_graph.seed_static(remember=False) if self.relation_graph and not dry_run else []
+        preview_static = static_symbol_relations() if self.relation_graph and dry_run else []
+        return {
+            "symbols": normalized,
+            "scout": scout.to_dict(),
+            "relationships": [item.to_dict() for item in [*stored, *preview, *static, *preview_static]],
+        }
+
     def scout_strategy_news(
         self,
         symbols: list[str],
@@ -169,8 +200,12 @@ class ResearchEngine:
         strategy_name: str = "semiconductor_reversal",
         dry_run: bool = False,
         deep: bool = False,
+        allow_external: bool = True,
     ) -> StrategyScoutResult:
-        return self.strategy_news_scout.scout(strategy_name, symbols, commit=not dry_run, deep=deep)
+        result = self.strategy_news_scout.scout(strategy_name, symbols, commit=not dry_run, deep=deep, allow_external=allow_external)
+        if self.relation_graph and not dry_run:
+            self.relation_graph.upsert_many_from_scout(result.relationships, remember=not dry_run)
+        return result
 
     def iterate_strategy_factors(self, *, dry_run: bool = False):
         return iterate_factor_specs(self.config, dry_run=dry_run)
@@ -190,11 +225,17 @@ class ResearchEngine:
         normalized = sorted(symbol for symbol in symbol_set if symbol)
         if self.config.strategy_lab.daily_factor_iteration_enabled:
             self.iterate_strategy_factors(dry_run=dry_run)
-        scout = self.scout_strategy_news(normalized, dry_run=dry_run, deep=True)
-        research_universe = sorted(expand_leveraged_symbols(set(normalized) | set(scout.related_symbols())))
+        scout = self.scout_strategy_news(normalized, dry_run=dry_run, deep=True, allow_external=True)
+        graph_related = self.relation_graph.related_symbols(normalized, min_confidence=self.config.relation_graph.min_confidence) if self.relation_graph else set()
+        graph_relationships = self.relation_graph.relationships_for(set(normalized) | graph_related, min_confidence=self.config.relation_graph.min_confidence) if self.relation_graph else []
+        research_universe = sorted(expand_leveraged_symbols(set(normalized) | set(scout.related_symbols()) | graph_related))
         quotes = self.data_hub.quotes(research_universe, commit=not dry_run)
+        if self.bar_store:
+            self.bar_store.refresh_from_quotes(quotes, commit=not dry_run)
         digest = self.generate_daily_digest(research_universe, days=5, dry_run=dry_run)
-        news = bridge_related_news(dedupe_news_items([*digest.items, *scout.news_items]), scout.relationships, normalized)
+        all_relationships = [*scout.relationships, *stored_relations_to_scout(graph_relationships)]
+        news = bridge_related_news(dedupe_news_items([*digest.items, *scout.news_items]), all_relationships, normalized)
+        news = self.evidence_ranker.top_news_items(news, research_universe, commit=not dry_run)
         feature_map = self.features.compute_many(normalized, quotes, news, holdings=holdings, commit=not dry_run)
         scores = self.score_universe(normalized, quotes, news, feature_map, holdings=holdings, commit=not dry_run)
         if not dry_run:
@@ -230,8 +271,8 @@ class ResearchEngine:
                 RiskGateContext(
                     portfolio_equity=equity,
                     paper_drawdown=drawdown,
-                    real_exposure=merged_exposure_value(real_exposure, score.symbol),
-                    paper_exposure=merged_exposure_value(paper_exposure, score.symbol),
+                    real_exposure=merged_exposure_value(real_exposure, score.symbol, graph_relationships),
+                    paper_exposure=merged_exposure_value(paper_exposure, score.symbol, graph_relationships),
                     asset_type="equity",
                     latest_backtest=latest_backtests.get(score.strategy),
                     evidence=by_symbol.get(score.symbol, []),
@@ -249,6 +290,7 @@ class ResearchEngine:
                 proposals.append(proposal)
             if not dry_run:
                 self._persist_strategy_signal(signal, verdict, proposal)
+                self.factor_attribution.record_signal(signal, quote, remember=True)
         paper_order_jobs = []
         if not dry_run and proposals:
             paper_order_jobs = self.enqueue_paper_order_proposals(proposals)
@@ -328,16 +370,23 @@ class ResearchEngine:
             factor_iteration = self.iterate_strategy_factors(dry_run=dry_run)
         else:
             factor_iteration = None
-        scout = self.scout_strategy_news(base_symbols, dry_run=dry_run, deep=True)
-        symbols = sorted(expand_leveraged_symbols(set(base_symbols) | set(scout.related_symbols())))
+        scout = self.scout_strategy_news(base_symbols, dry_run=dry_run, deep=True, allow_external=False)
+        graph_related = self.relation_graph.related_symbols(base_symbols, min_confidence=self.config.relation_graph.min_confidence) if self.relation_graph else set()
+        graph_relationships = self.relation_graph.relationships_for(set(base_symbols) | graph_related, min_confidence=self.config.relation_graph.min_confidence) if self.relation_graph else []
+        symbols = sorted(expand_leveraged_symbols(set(base_symbols) | set(scout.related_symbols()) | graph_related))
         quotes = self.data_hub.quotes(symbols, commit=not dry_run)
-        digest = self.generate_daily_digest(symbols, days=5, dry_run=dry_run)
-        news = bridge_related_news(dedupe_news_items([*digest.items, *scout.news_items]), scout.relationships, symbols)
+        if self.bar_store:
+            self.bar_store.refresh_from_quotes(quotes, commit=not dry_run)
+        digest = self.generate_daily_digest(symbols, days=5, dry_run=dry_run, include_web=False)
+        all_relationships = [*scout.relationships, *stored_relations_to_scout(graph_relationships)]
+        news = bridge_related_news(dedupe_news_items([*digest.items, *scout.news_items]), all_relationships, symbols)
+        ranked_evidence = self.evidence_ranker.rank_news(news, symbols, commit=not dry_run)
+        news = self.evidence_ranker.top_news_items(news, symbols, commit=False)
         feature_map = self.features.compute_many(symbols, quotes, news, holdings=holdings, commit=not dry_run)
         scores = self.score_universe(symbols, quotes, news, feature_map, holdings=holdings, commit=not dry_run)
         options = self.long_call_candidates(symbols, quotes, news)
         analyzed_news = analyze_news_items(news, holdings, set(symbols), limit=15, min_relevance=self.config.research.min_news_relevance)
-        news_section = digest.summary + "\n\n" + format_analyzed_news_section(analyzed_news)
+        news_section = ranked_evidence_summary(ranked_evidence) + "\n\n" + format_analyzed_news_section(analyzed_news)
         company_detail_section = self.company_detail_section(scores, news, quotes, feature_map, holdings)
         option_section = "\n".join(candidate.reason for candidate in options[:12]) or "未配置期权数据，或没有长期 call 候选满足筛选条件。"
         memory_context = self.memory.context(
@@ -350,10 +399,14 @@ class ResearchEngine:
         backtest_summary = self.backtest_summary()
         agent_summary = self.agent_status_summary()
         strategy_scout_section = scout.summary()
+        relation_summary = graph_relationship_summary(graph_relationships)
+        if relation_summary:
+            strategy_scout_section += "\n\n" + relation_summary
         if factor_iteration is not None:
             strategy_scout_section += "\n\n" + factor_iteration.summary
         if dry_run or not self.openai.configured:
             report = self._fallback_report(scores, news_section, company_detail_section, option_section, memory_context, holdings, paper_summary, skill_summary, backtest_summary, agent_summary, strategy_scout_section)
+            report = self._verify_report_or_fallback(report, holdings, graph_relationships, scout.queries, symbols, dry_run=dry_run)
             self._remember_report(report, symbols)
             return report
         try:
@@ -369,11 +422,13 @@ class ResearchEngine:
                 agent_summary,
             )
             full_report = report + "\n\n## 策略自主深挖\n" + strategy_scout_section + "\n\n## 候选公司详解\n" + company_detail_section + "\n\n长期期权候选:\n" + option_section + "\n\n## Agent 运行状态\n" + agent_summary
+            full_report = self._verify_report_or_fallback(full_report, holdings, graph_relationships, scout.queries, symbols, dry_run=dry_run)
             self._remember_report(full_report, symbols)
             return full_report
         except Exception as exc:
             fallback = self._fallback_report(scores, news_section, company_detail_section, option_section, memory_context, holdings, paper_summary, skill_summary, backtest_summary, agent_summary, strategy_scout_section)
             full_report = f"{fallback}\n\nLLM 报告生成失败，已使用本地中文回退报告。错误: {exc}"
+            full_report = self._verify_report_or_fallback(full_report, holdings, graph_relationships, scout.queries, symbols, dry_run=dry_run)
             self._remember_report(full_report, symbols)
             return full_report
 
@@ -393,10 +448,13 @@ class ResearchEngine:
         symbol_set = expand_leveraged_symbols(symbol_set)
         normalized = sorted(symbol for symbol in symbol_set if symbol)
         quotes = self.data_hub.quotes(normalized, commit=not dry_run)
+        if self.bar_store:
+            self.bar_store.refresh_from_quotes(quotes, commit=not dry_run)
         if force_refresh:
             news = self.data_hub.collect_news(normalized, days=days, commit=not dry_run, force_refresh=True)
         else:
             news = self.collect_news(normalized, days=days, commit=not dry_run)
+        news = self.evidence_ranker.top_news_items(news, normalized, commit=not dry_run)
         feature_map = self.features.compute_many(normalized, quotes, news, holdings=holdings, commit=not dry_run)
         scores = self.score_universe(normalized, quotes, news, feature_map, holdings=holdings, commit=not dry_run)
         analyzed_news = analyze_news_items(news, holdings, set(normalized), limit=20, min_relevance=self.config.research.min_news_relevance)
@@ -624,6 +682,33 @@ class ResearchEngine:
                 metadata=asdict(proposal),
             )
 
+    def _verify_report_or_fallback(
+        self,
+        report: str,
+        holdings: list[Holding],
+        relationships: list[StoredSymbolRelation],
+        query_log: list[str],
+        symbols: list[str],
+        *,
+        dry_run: bool,
+    ) -> str:
+        verification = self.report_verifier.verify(report, holdings, relationships, query_log=query_log, commit=not dry_run)
+        if verification.blocked:
+            fallback = fallback_verified_report(report, verification)
+            if not dry_run:
+                self.memory.add(
+                    "missed_signal_review",
+                    f"report blocked and downgraded for {', '.join(symbols[:8])}: {verification.summary}",
+                    symbol=",".join(symbols[:8]),
+                    strategy="report_verifier",
+                    importance=0.82,
+                    confidence=0.85,
+                    source="report_verifier",
+                    metadata=verification.to_dict(),
+                )
+            return fallback
+        return report
+
     def _remember_report(self, report: str, symbols: list[str]) -> None:
         summary = "\n".join(report.splitlines()[:18])
         self.memory.add(
@@ -836,7 +921,7 @@ def paper_exposure_by_symbol(positions) -> dict[str, float]:
     return values
 
 
-def merged_exposure_value(values: dict[str, float], symbol: str) -> float:
+def merged_exposure_value(values: dict[str, float], symbol: str, relationships: list[StoredSymbolRelation] | None = None) -> float:
     symbol = str(symbol or "").strip().upper()
     exposure = leveraged_exposure(symbol)
     if exposure:
@@ -846,7 +931,52 @@ def merged_exposure_value(values: dict[str, float], symbol: str) -> float:
     for leveraged_symbol, leveraged in LEVERAGED_EXPOSURES.items():
         if leveraged.underlying == symbol:
             total = max(total, float(values.get(leveraged_symbol, 0.0)), float(values.get(symbol, 0.0)))
+    for relation in relationships or []:
+        if relation.confidence < 0.55:
+            continue
+        if relation.source_symbol == symbol:
+            total = max(total, direct, float(values.get(relation.related_symbol, 0.0)))
+        elif relation.related_symbol == symbol:
+            total = max(total, direct, float(values.get(relation.source_symbol, 0.0)) * max(1.0, float(relation.multiplier or 1.0)))
     return total
+
+
+def stored_relations_to_scout(relations: list[StoredSymbolRelation]) -> list[SymbolRelationship]:
+    result: list[SymbolRelationship] = []
+    for relation in relations:
+        result.append(
+            SymbolRelationship(
+                source_symbol=relation.source_symbol,
+                related_symbol=relation.related_symbol,
+                relation_type=relation.relation_type,
+                confidence=relation.confidence,
+                evidence_title=relation.evidence_title,
+                evidence_url=relation.evidence_url,
+                query=str(relation.metadata.get("query") or relation.source or "relation_graph"),
+                metadata={
+                    **dict(relation.metadata or {}),
+                    "source": relation.source,
+                    "multiplier": relation.multiplier,
+                    "observed_at": relation.observed_at.isoformat(),
+                },
+                created_at=relation.observed_at,
+            )
+        )
+    return result
+
+
+def graph_relationship_summary(relations: list[StoredSymbolRelation]) -> str:
+    if not relations:
+        return ""
+    lines = ["底层关系图"]
+    for relation in sorted(relations, key=lambda item: item.confidence, reverse=True)[:10]:
+        multiplier = f"{relation.multiplier:g}x " if relation.multiplier and relation.multiplier != 1.0 else ""
+        evidence = f" evidence={relation.evidence_url}" if relation.evidence_url else ""
+        lines.append(
+            f"- {relation.source_symbol}: 直接持仓/产品；经济底层 {multiplier}{relation.related_symbol}; "
+            f"type={relation.relation_type}; confidence={relation.confidence:.2f}; source={relation.source}{evidence}"
+        )
+    return "\n".join(lines)
 
 
 def event_matches_signal(event_symbol: str, signal_symbol: str) -> bool:
@@ -1052,9 +1182,11 @@ def format_feature_for_detail(features: dict) -> str:
     relevance = float(features.get("relevance_score") or 0.0)
     behavior_score = float(features.get("daily_behavior_score") or 0.0)
     intraday = float(features.get("intraday_return_pct") or 0.0)
+    ret5 = float(features.get("return_5d") or 0.0)
+    rel_volume = float(features.get("relative_volume") or 0.0)
     behavior_flags = features.get("behavior_flags") or []
     behavior_text = ",".join(behavior_flags[:3]) if isinstance(behavior_flags, list) and behavior_flags else "无"
-    return f"情绪 {sentiment:+.0f}, 高影响新闻 {high_impact}, 相关新闻相关性 {relevance:.2f}, 链路 {chains}, 日常行为 {behavior_score:+.1f}({intraday:+.2f}%, {behavior_text})"
+    return f"情绪 {sentiment:+.0f}, 高影响新闻 {high_impact}, 相关新闻相关性 {relevance:.2f}, 链路 {chains}, 日常行为 {behavior_score:+.1f}(日内 {intraday:+.2f}%, 5日 {ret5:+.2f}%, RVOL {rel_volume:.2f}, {behavior_text})"
 
 
 def readable_news_evidence(item: NewsItem) -> str:
@@ -1065,6 +1197,17 @@ def readable_news_evidence(item: NewsItem) -> str:
     if len(summary) > 180:
         summary = summary[:177].rstrip() + "..."
     return f"{published} {source}{via}: {item.title} - {summary}"
+
+
+def ranked_evidence_summary(ranked) -> str:
+    if not ranked:
+        return "证据排序：暂无可展示的高相关证据。"
+    lines = ["证据排序 Top Evidence"]
+    for item in sorted(ranked, key=lambda row: row.score, reverse=True)[:20]:
+        published = item.published_at.date().isoformat() if item.published_at else "未知日期"
+        reasons = ",".join(item.reasons[:3]) if item.reasons else "ranked"
+        lines.append(f"- {item.symbol}: score={item.score:.2f}; {published} {item.source}: {item.title} {item.url} ({reasons})")
+    return "\n".join(lines)
 
 
 def latest_unique_signals(records) -> list:

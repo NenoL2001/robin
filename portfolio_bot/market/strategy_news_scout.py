@@ -77,6 +77,7 @@ class StrategyScoutResult:
     events: list[EventObservation]
     gaps: list[dict[str, Any]]
     relationships: list[SymbolRelationship] = field(default_factory=list)
+    allow_external: bool = True
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
@@ -108,7 +109,8 @@ class StrategyScoutResult:
             f"- strategy={self.strategy_name}; symbols={', '.join(self.symbols) or 'none'}; queries={len(self.queries)}; evidence={len(self.evidence)}; events={len(self.events)}; relations={len(self.relationships)}; gaps={len(self.gaps)}",
         ]
         if self.queries:
-            lines.append("- 已执行 query: " + " | ".join(self.queries[:8]))
+            label = "已执行 query" if self.allow_external else "只读报告 query 模板"
+            lines.append(f"- {label}: " + " | ".join(self.queries[:8]))
         for event in self.events[:12]:
             lines.append(f"- {event.symbol} {event.event_type}: {event.title} {event.url}")
         for relation in self.relationships[:6]:
@@ -142,6 +144,7 @@ class StrategyNewsScout:
         themes: list[str] | None = None,
         commit: bool = True,
         deep: bool = False,
+        allow_external: bool = True,
     ) -> StrategyScoutResult:
         normalized = expand_strategy_symbols(symbols)
         if not self.config.strategy_research.enabled:
@@ -154,9 +157,10 @@ class StrategyNewsScout:
             deep=deep,
         )
         evidence: list[WebEvidence] = []
-        for query in queries:
-            evidence.extend(self.web_search.search(query, symbols=normalized, commit=commit))
-        if self.config.research.web_search_enabled:
+        if allow_external:
+            for query in queries:
+                evidence.extend(self.web_search.search(query, symbols=normalized, commit=commit))
+        if allow_external and self.config.research.web_search_enabled:
             evidence.extend(direct_product_evidence_for(normalized, timeout=self.config.research.web_search_timeout_seconds))
         evidence.extend(curated_evidence_for(normalized))
         evidence = dedupe_web_evidence(evidence)
@@ -167,17 +171,18 @@ class StrategyNewsScout:
                 if query in queries:
                     continue
                 queries.append(query)
-                evidence.extend(self.web_search.search(query, symbols=[*normalized, *related_symbols], commit=commit))
+                if allow_external:
+                    evidence.extend(self.web_search.search(query, symbols=[*normalized, *related_symbols], commit=commit))
             evidence = dedupe_web_evidence(evidence)
             relationships = extract_symbol_relationships(evidence, normalized)
         events = extract_event_observations(evidence, normalized)
         gaps = []
-        if self.config.strategy_research.secondary_search_on_gap:
+        if allow_external and self.config.strategy_research.secondary_search_on_gap:
             covered = {symbol for item in evidence for symbol in item.symbols}
             for symbol in normalized:
                 if symbol not in covered and not related_symbol_has_evidence(symbol, covered):
                     gaps.append({"symbol": symbol, "queries": [query for query in queries if symbol in query.upper()] or queries[:3]})
-        result = StrategyScoutResult(strategy_name, normalized, queries, evidence, events, gaps, relationships)
+        result = StrategyScoutResult(strategy_name, normalized, queries, evidence, events, gaps, relationships, allow_external=allow_external)
         if commit:
             self._remember(result)
         return result
@@ -499,7 +504,11 @@ def extract_symbol_relationships(evidence: list[WebEvidence], source_symbols: li
     seen: set[tuple[str, str, str]] = set()
     for item in evidence:
         text = f"{item.title} {item.summary}"
-        source_candidates = {symbol for symbol in source_set if symbol in {value.upper() for value in item.symbols} or symbol_matches_text(symbol, text)}
+        item_symbol_set = {value.upper() for value in item.symbols}
+        if item_symbol_set:
+            source_candidates = source_set & item_symbol_set
+        else:
+            source_candidates = {symbol for symbol in source_set if symbol_matches_text(symbol, text)}
         if not source_candidates:
             continue
         relation_text = text.lower()

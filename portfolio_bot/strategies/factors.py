@@ -171,6 +171,9 @@ def behavior_factor_signals(features: dict[str, Any], weights: dict[str, Any]) -
     overextension = float(behavior.get("overextension_score") or 0.0)
     position_pressure = float(behavior.get("position_pressure_score") or 0.0)
     volume_confirmation = float(behavior.get("volume_confirmation_score") or 0.0)
+    return_5d = float(behavior.get("return_5d") or 0.0)
+    relative_volume = float(behavior.get("relative_volume") or 0.0)
+    close_location = float(behavior.get("close_location_value") or 0.5)
     flags = ", ".join(behavior.get("flags") or [])
     signals = [
         FactorSignal(
@@ -180,6 +183,33 @@ def behavior_factor_signals(features: dict[str, Any], weights: dict[str, Any]) -
             f"deterministic intraday behavior score; flags={flags or 'none'}",
         )
     ]
+    if not behavior.get("history_missing"):
+        if abs(return_5d) >= 2.0:
+            signals.append(
+                FactorSignal(
+                    "bar_momentum_5d",
+                    return_5d,
+                    bounded(return_5d * float(weights.get("bar_momentum_5d", 0.35) or 0.0), -6.0, 6.0),
+                    "deterministic 5-day bar return from local BarStore",
+                )
+            )
+        if relative_volume >= 1.2:
+            signals.append(
+                FactorSignal(
+                    "relative_volume_confirmation",
+                    relative_volume,
+                    min(5.0, (relative_volume - 1.0) * float(weights.get("relative_volume_confirmation", 1.5) or 0.0)),
+                    "current bar volume versus local average volume",
+                )
+            )
+        signals.append(
+            FactorSignal(
+                "close_location_quality",
+                close_location,
+                bounded((close_location - 0.5) * float(weights.get("close_location_quality", 2.0) or 0.0) * 2.0, -3.0, 3.0),
+                "close location value inside daily high-low range",
+            )
+        )
     if abs_move >= 8.0:
         signals.append(
             FactorSignal(
@@ -243,6 +273,9 @@ def default_event_factor_weight(name: str) -> float:
         "sell_the_news_volatility": -6.0,
         "intraday_followthrough": 0.45,
         "volume_confirmation": 1.0,
+        "bar_momentum_5d": 0.35,
+        "relative_volume_confirmation": 1.5,
+        "close_location_quality": 2.0,
         "underlying_relation_strength": 8.0,
     }
     return defaults.get(name, 0.0)

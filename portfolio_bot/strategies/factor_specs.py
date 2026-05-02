@@ -9,6 +9,7 @@ import yaml
 
 from ..config import BotConfig
 from ..memory import MemoryStore, memory_path
+from .factor_attribution import FactorAttributionStore
 
 
 FACTOR_SPEC_DIR = "_factor_specs"
@@ -131,6 +132,27 @@ DEFAULT_FACTOR_SPECS = [
         query_terms=["volume", "confirmation"],
     ),
     FactorSpec(
+        "bar_momentum_5d",
+        weight=0.35,
+        evidence_required=False,
+        description="Local 5-day bar return contribution, capped to avoid chasing single-day spikes.",
+        query_terms=["5d return", "trend"],
+    ),
+    FactorSpec(
+        "relative_volume_confirmation",
+        weight=1.5,
+        evidence_required=False,
+        description="Historical bar relative volume confirmation versus recent average.",
+        query_terms=["relative volume", "volume breakout"],
+    ),
+    FactorSpec(
+        "close_location_quality",
+        weight=2.0,
+        evidence_required=False,
+        description="Close location value within the daily range as deterministic demand/supply clue.",
+        query_terms=["close location", "range position"],
+    ),
+    FactorSpec(
         "underlying_relation_strength",
         weight=8.0,
         description="Inferred relationship from product/ETF/search evidence connecting a symbol to its economic underlying.",
@@ -201,6 +223,8 @@ def iterate_factor_specs(config: BotConfig, *, dry_run: bool = False) -> FactorI
             spec.min_observations_for_orders = config.strategy_lab.min_factor_observations_for_orders
             spec.updated_at = now
             updated.append(spec.name)
+    attribution_updates = apply_attribution_feedback(config, existing, now)
+    updated.extend(name for name in attribution_updates if name not in updated)
     specs = sorted(existing.values(), key=lambda item: item.name)
     summary = render_factor_iteration_summary(specs, added, updated, dry_run=dry_run)
     if not dry_run:
@@ -227,6 +251,44 @@ def iterate_factor_specs(config: BotConfig, *, dry_run: bool = False) -> FactorI
             metadata={"added": added, "updated": updated, "spec_count": len(specs)},
         )
     return FactorIterationResult(dry_run=dry_run, specs=specs, added=added, updated=updated, summary=summary)
+
+
+def apply_attribution_feedback(config: BotConfig, existing: dict[str, FactorSpec], now: str) -> list[str]:
+    if not config.strategy_lab.daily_factor_iteration_enabled:
+        return []
+    try:
+        summaries = FactorAttributionStore.from_config(config).summary(
+            horizon="1d",
+            min_observations=max(1, int(config.strategy_lab.min_factor_observations_for_orders)),
+        )
+    except Exception:
+        return []
+    updated: list[str] = []
+    for summary in summaries:
+        spec = existing.get(summary.factor_name)
+        if not spec:
+            continue
+        original = float(spec.weight or 0.0)
+        if abs(original) <= 0:
+            continue
+        if summary.directional_score < -0.5:
+            spec.weight = shrink_weight(original)
+        elif summary.directional_score > 0.75:
+            spec.weight = expand_weight(original)
+        if spec.weight != original:
+            spec.updated_at = now
+            updated.append(spec.name)
+    return updated
+
+
+def shrink_weight(value: float) -> float:
+    sign = -1.0 if value < 0 else 1.0
+    return round(sign * max(0.1, min(20.0, abs(value) * 0.9)), 4)
+
+
+def expand_weight(value: float) -> float:
+    sign = -1.0 if value < 0 else 1.0
+    return round(sign * max(0.1, min(20.0, abs(value) * 1.05)), 4)
 
 
 def render_factor_iteration_summary(specs: list[FactorSpec], added: list[str], updated: list[str], *, dry_run: bool) -> str:

@@ -1,0 +1,224 @@
+- name: bar_momentum_5d
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 0.35
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Local 5-day bar return contribution, capped to avoid chasing single-day
+    spikes.
+  query_terms:
+  - 5d return
+  - trend
+  updated_at: '2026-05-02T23:12:26.457770+00:00'
+- name: close_location_quality
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 2.0
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Close location value within the daily range as deterministic demand/supply
+    clue.
+  query_terms:
+  - close location
+  - range position
+  updated_at: '2026-05-02T23:12:26.457770+00:00'
+- name: contracted_revenue_visibility
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 10.0
+  min_observations_for_orders: 20
+  evidence_required: true
+  description: Multiyear commitments, financial guarantees, NBM contracts, or prepayments.
+  query_terms:
+  - NBM
+  - multiyear
+  - financial guarantee
+  - prepayment
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: datacenter_mix_shift
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 10.0
+  min_observations_for_orders: 20
+  evidence_required: true
+  description: Revenue mix shift toward data center or AI infrastructure customers.
+  query_terms:
+  - datacenter
+  - data center
+  - AI infrastructure
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: earnings_surprise
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 14.0
+  min_observations_for_orders: 20
+  evidence_required: true
+  description: Official earnings beat or above-guidance financial results.
+  query_terms:
+  - earnings beat
+  - above guidance
+  - EPS
+  - revenue
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: guidance_revision
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 12.0
+  min_observations_for_orders: 20
+  evidence_required: true
+  description: Forward revenue/EPS/margin guide raised or materially above consensus/prior
+    guide.
+  query_terms:
+  - guidance
+  - outlook
+  - Q4 guide
+  - raises guidance
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: hbf_ai_inference_moat
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 10.0
+  min_observations_for_orders: 20
+  evidence_required: true
+  description: High Bandwidth Flash, BiCS8, Stargate, or AI inference memory roadmap
+    evidence.
+  query_terms:
+  - High Bandwidth Flash
+  - HBF
+  - BiCS8
+  - Stargate
+  - AI inference
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: intraday_followthrough
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 0.45
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Deterministic local intraday behavior score from quote return, gap,
+    and move shape.
+  query_terms:
+  - intraday
+  - follow-through
+  - price behavior
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: large_move_reversal_risk
+  version: 1.0.0
+  status: candidate
+  direction: negative
+  weight: -1.0
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Large daily move control that penalizes overextension even when news
+    is strong.
+  query_terms:
+  - overextension
+  - reversal risk
+  - large move
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: official_source_strength
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 4.0
+  min_observations_for_orders: 20
+  evidence_required: true
+  description: Evidence comes from official IR, company PDF, SEC filing, or primary
+    source.
+  query_terms:
+  - investor relations
+  - 10-Q
+  - press release
+  - fact sheet
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: position_crowding_pressure
+  version: 1.0.0
+  status: candidate
+  direction: negative
+  weight: -1.0
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Existing position size plus large daily move pressure for paper sizing
+    discipline.
+  query_terms:
+  - position sizing
+  - crowding
+  - exposure
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: product_roadmap_acceleration
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 8.0
+  min_observations_for_orders: 20
+  evidence_required: true
+  description: Sampling, shipping, ramp, or roadmap acceleration for a strategic product.
+  query_terms:
+  - samples
+  - shipping
+  - ramp
+  - roadmap
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: relative_volume_confirmation
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 1.5
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Historical bar relative volume confirmation versus recent average.
+  query_terms:
+  - relative volume
+  - volume breakout
+  updated_at: '2026-05-02T23:12:26.457770+00:00'
+- name: sell_the_news_volatility
+  version: 1.0.0
+  status: candidate
+  direction: negative
+  weight: -6.0
+  min_observations_for_orders: 20
+  evidence_required: true
+  description: Post-earnings profit-taking, parabolic move, high short/options activity,
+    or liquidity risk.
+  query_terms:
+  - sell-the-news
+  - profit-taking
+  - parabolic
+  - volatility
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: underlying_relation_strength
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 8.0
+  min_observations_for_orders: 20
+  evidence_required: true
+  description: Inferred relationship from product/ETF/search evidence connecting a
+    symbol to its economic underlying.
+  query_terms:
+  - underlying
+  - 2x long
+  - fund holdings
+  - ETF
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: volume_confirmation
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 1.0
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Quote-level volume availability/confirmation until historical volume
+    normalization is added.
+  query_terms:
+  - volume
+  - confirmation
+  updated_at: '2026-05-02T20:30:55.650309+00:00'
