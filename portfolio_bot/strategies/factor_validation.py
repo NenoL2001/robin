@@ -5,6 +5,7 @@ from typing import Any
 
 from ..market.news_strategy import FactorCandidateProposal
 from .factor_attribution import FactorAttributionSummary
+from .factor_formulas import FactorFormulaRegistry
 from .factor_specs import FactorSpec
 
 
@@ -66,7 +67,9 @@ def validate_factor_flow(
     attribution_summary: list[FactorAttributionSummary],
     dry_run: bool,
 ) -> FactorFlowValidationResult:
-    spec_names = {item.name for item in specs}
+    spec_by_name = {item.name: item for item in specs}
+    spec_names = set(spec_by_name)
+    registry = FactorFormulaRegistry.default()
     issues: list[FactorFlowIssue] = []
     signals = [item for item in plan.get("signals", []) if isinstance(item, dict)]
     for signal in signals:
@@ -87,9 +90,23 @@ def validate_factor_flow(
             name = str(row.get("name", ""))
             if name and name not in spec_names and not name.startswith(("base_", "portfolio_", "risk_", "valuation_", "price_", "chain_", "catalyst_", "high_impact")):
                 issues.append(FactorFlowIssue("warn", symbol, f"factor {name} observed but missing from factor spec store"))
+            spec = spec_by_name.get(name)
+            contribution = float(row.get("contribution") or 0.0)
+            if spec and spec.status in {"quarantined", "retired"} and abs(contribution) > 1e-9:
+                issues.append(FactorFlowIssue("error", symbol, f"factor {name} has status={spec.status} but contributed to scoring"))
+            if spec and spec.status == "candidate" and abs(contribution) > 1e-9 and str(signal.get("action", "")) == "paper_buy":
+                issues.append(FactorFlowIssue("error", symbol, f"candidate factor {name} contributed to paper_buy scoring"))
     for spec in specs:
         if spec.evidence_required and not spec.query_terms:
             issues.append(FactorFlowIssue("warn", "", f"factor {spec.name} requires evidence but has no query_terms"))
+        if not spec.formula_ref:
+            issues.append(FactorFlowIssue("error", "", f"factor {spec.name} missing formula_ref"))
+        elif not registry.exists(spec.formula_ref):
+            severity = "error" if spec.status == "active" else "warn"
+            issues.append(FactorFlowIssue(severity, "", f"factor {spec.name} formula_ref {spec.formula_ref} is not registered"))
+        elif spec.formula_hash and not registry.validate_hash(spec.formula_ref, spec.formula_hash):
+            severity = "error" if spec.status == "active" else "warn"
+            issues.append(FactorFlowIssue(severity, "", f"factor {spec.name} formula_hash mismatch for {spec.formula_ref}"))
     return FactorFlowValidationResult(
         dry_run=dry_run,
         checked_signals=len(signals),

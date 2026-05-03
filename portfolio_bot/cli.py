@@ -6,6 +6,8 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
+import yaml
+
 from .backtest import BacktestStore, default_demo_prices, format_backtest_result, load_prices_csv, run_equity_backtest, run_long_call_backtest
 from .config import load_config
 from .data_hub import DataHub
@@ -22,6 +24,7 @@ from .research import ResearchEngine
 from .runtime import RuntimeStore, runtime_path
 from .screenshot_import import import_screenshot
 from .storage import load_holdings
+from .strategies.factor_specs import FactorSpecStore, factor_spec_from_mapping, record_factor_mutations
 from .supervisor import Supervisor
 from .workers import run_worker
 from .agents.harness import run_agent
@@ -85,6 +88,30 @@ def main(argv: list[str] | None = None) -> None:
     factor_validate_p = sub.add_parser("factor-validate-now")
     factor_validate_p.add_argument("--symbols", nargs="*", default=[])
     factor_validate_p.add_argument("--dry-run", action="store_true")
+
+    factor_list_p = sub.add_parser("factor-list")
+    factor_list_p.add_argument("--status", default="")
+    factor_list_p.add_argument("--json", action="store_true")
+
+    factor_show_p = sub.add_parser("factor-show")
+    factor_show_p.add_argument("name")
+
+    factor_upsert_p = sub.add_parser("factor-upsert")
+    factor_upsert_p.add_argument("--file", required=True)
+    factor_upsert_p.add_argument("--dry-run", action="store_true")
+
+    factor_status_p = sub.add_parser("factor-status")
+    factor_status_p.add_argument("name")
+    factor_status_p.add_argument("--status", choices=["candidate", "active", "quarantined", "retired"], required=True)
+    factor_status_p.add_argument("--reason", default="manual_status")
+    factor_status_p.add_argument("--dry-run", action="store_true")
+
+    factor_delete_p = sub.add_parser("factor-delete")
+    factor_delete_p.add_argument("name")
+    factor_delete_p.add_argument("--hard", action="store_true")
+    factor_delete_p.add_argument("--confirm", default="")
+    factor_delete_p.add_argument("--reason", default="manual_delete")
+    factor_delete_p.add_argument("--dry-run", action="store_true")
 
     bars_refresh_p = sub.add_parser("bars-refresh-now")
     bars_refresh_p.add_argument("--symbols", nargs="*", default=[])
@@ -326,6 +353,55 @@ def main(argv: list[str] | None = None) -> None:
         result = ResearchEngine(config).validate_strategy_factor_flow(symbols, holdings=holdings, dry_run=args.dry_run)
         print(result["validation_summary"])
         print(json.dumps(result["validation"], ensure_ascii=False, indent=2, default=str))
+    elif args.command == "factor-list":
+        specs = FactorSpecStore(config.strategy_root).list(status=args.status or None)
+        if args.json:
+            print(json.dumps([item.to_dict() for item in specs], ensure_ascii=False, indent=2, default=str))
+        else:
+            for spec in specs:
+                print(f"{spec.name}\t{spec.status}\tweight={spec.weight:g}\tformula={spec.formula_ref}")
+    elif args.command == "factor-show":
+        spec = FactorSpecStore(config.strategy_root).get(args.name)
+        if not spec:
+            raise SystemExit(f"factor not found: {args.name}")
+        print(json.dumps(spec.to_dict(), ensure_ascii=False, indent=2, default=str))
+    elif args.command == "factor-upsert":
+        store = FactorSpecStore(config.strategy_root)
+        raw = yaml.safe_load(Path(args.file).read_text(encoding="utf-8")) or {}
+        rows = raw if isinstance(raw, list) else [raw]
+        specs = [factor_spec_from_mapping(row) for row in rows if isinstance(row, dict)]
+        if args.dry_run:
+            print(json.dumps({"dry_run": True, "upsert": [item.to_dict() for item in specs]}, ensure_ascii=False, indent=2, default=str))
+        else:
+            mutations = [store.upsert(spec, reason=f"manual upsert from {args.file}") for spec in specs]
+            record_factor_mutations(config, store, mutations, f"manual factor upsert count={len(mutations)}")
+            print(json.dumps([item.to_dict() for item in mutations], ensure_ascii=False, indent=2, default=str))
+    elif args.command == "factor-status":
+        store = FactorSpecStore(config.strategy_root)
+        if args.dry_run:
+            spec = store.get(args.name)
+            if not spec:
+                raise SystemExit(f"factor not found: {args.name}")
+            preview = spec.to_dict()
+            preview["status"] = args.status
+            preview["reason"] = args.reason
+            print(json.dumps({"dry_run": True, "preview": preview}, ensure_ascii=False, indent=2, default=str))
+        else:
+            mutation = store.set_status(args.name, args.status, reason=args.reason)
+            record_factor_mutations(config, store, [mutation], f"manual factor status {args.name} -> {args.status}")
+            print(json.dumps(mutation.to_dict(), ensure_ascii=False, indent=2, default=str))
+    elif args.command == "factor-delete":
+        store = FactorSpecStore(config.strategy_root)
+        if args.dry_run:
+            spec = store.get(args.name)
+            if not spec:
+                raise SystemExit(f"factor not found: {args.name}")
+            action = "hard_deleted" if args.hard else "retired"
+            print(json.dumps({"dry_run": True, "action": action, "factor": spec.to_dict()}, ensure_ascii=False, indent=2, default=str))
+        else:
+            mutation = store.hard_delete(args.name, confirm=args.confirm) if args.hard else store.retire(args.name, reason=args.reason)
+            record_factor_mutations(config, store, [mutation], f"manual factor delete {args.name}")
+            print(json.dumps(mutation.to_dict(), ensure_ascii=False, indent=2, default=str))
     elif args.command == "bars-refresh-now":
         holdings = load_holdings(config.holdings_path)
         symbols = args.symbols or sorted(research_symbols_for_cli(holdings) | set(config.research.default_universe))
@@ -364,9 +440,13 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps({"horizon": args.horizon, "symbols": symbols, "updated": updated, "summary": [item.to_dict() for item in summary]}, ensure_ascii=False, indent=2, default=str))
     elif args.command == "strategy-iterate-now":
         engine = ResearchEngine(config)
+        open_symbols = engine.factor_attribution.symbols_with_open_attribution(horizon="1d")
+        quotes = engine.data_hub.quotes(open_symbols, commit=not args.dry_run) if open_symbols else {}
+        attribution_updated = 0 if args.dry_run else engine.factor_attribution.update_forward_returns(quotes, horizon="1d", remember=True)
         factor_result = engine.iterate_strategy_factors(dry_run=args.dry_run)
         holdings = load_holdings(config.holdings_path)
         plan = engine.generate_strategy_plan(args.symbols or None, holdings=holdings, dry_run=args.dry_run)
+        print(f"factor attribution updated={attribution_updated}")
         print(factor_result.summary)
         print()
         print(plan["summary"])

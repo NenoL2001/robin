@@ -97,9 +97,16 @@ class ResearchEngine:
     ) -> list[StrategyScore]:
         feature_map = feature_map or self.features.compute_many(symbols, quotes, news, holdings=holdings or self.current_holdings)
         factor_weights = self.factor_specs.weights()
-        if factor_weights:
+        factor_statuses = self.factor_specs.statuses()
+        factor_formula_hashes = self.factor_specs.formula_hashes()
+        if factor_weights or factor_statuses:
             feature_map = {
-                symbol: {**dict(features or {}), "factor_weights": factor_weights}
+                symbol: {
+                    **dict(features or {}),
+                    "factor_weights": factor_weights,
+                    "factor_statuses": factor_statuses,
+                    "factor_formula_hashes": factor_formula_hashes,
+                }
                 for symbol, features in feature_map.items()
             }
         by_symbol = news_by_symbol(news, symbols)
@@ -209,8 +216,8 @@ class ResearchEngine:
             self.relation_graph.upsert_many_from_scout(result.relationships, remember=not dry_run)
         return result
 
-    def iterate_strategy_factors(self, *, dry_run: bool = False):
-        return iterate_factor_specs(self.config, dry_run=dry_run)
+    def iterate_strategy_factors(self, *, dry_run: bool = False, candidate_proposals: list[object] | None = None):
+        return iterate_factor_specs(self.config, dry_run=dry_run, candidate_proposals=candidate_proposals)
 
     def validate_strategy_factor_flow(
         self,
@@ -295,6 +302,10 @@ class ResearchEngine:
         if self.bar_store:
             self.bar_store.refresh_from_quotes(quotes, commit=not dry_run)
         digest = self.generate_daily_digest(research_universe, days=5, dry_run=dry_run)
+        existing_names = {item.name for item in self.factor_specs.load()}
+        candidate_proposals = propose_factor_candidates_from_news(digest.items, existing_names)
+        if candidate_proposals:
+            self.iterate_strategy_factors(dry_run=dry_run, candidate_proposals=candidate_proposals)
         all_relationships = [*scout.relationships, *stored_relations_to_scout(graph_relationships)]
         news = bridge_related_news(dedupe_news_items([*digest.items, *scout.news_items]), all_relationships, normalized)
         news = self.evidence_ranker.top_news_items(news, research_universe, commit=not dry_run)

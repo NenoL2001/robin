@@ -122,6 +122,11 @@ class StrategyLabConfig:
     daily_factor_iteration_enabled: bool = True
     allow_new_factor_candidates: bool = True
     min_factor_observations_for_orders: int = 20
+    factor_promote_directional_score: float = 0.75
+    factor_demote_directional_score: float = -0.5
+    factor_quarantine_observations: int = 40
+    factor_retire_after_quarantine_days: int = 30
+    allow_formula_candidates: bool = True
 
 
 @dataclass(slots=True)
@@ -437,6 +442,11 @@ def load_config(path: str | Path = "config.yaml") -> BotConfig:
         daily_factor_iteration_enabled=bool(strategy_lab_raw.get("daily_factor_iteration_enabled", True)),
         allow_new_factor_candidates=bool(strategy_lab_raw.get("allow_new_factor_candidates", True)),
         min_factor_observations_for_orders=int(strategy_lab_raw.get("min_factor_observations_for_orders", 20)),
+        factor_promote_directional_score=float(strategy_lab_raw.get("factor_promote_directional_score", 0.75)),
+        factor_demote_directional_score=float(strategy_lab_raw.get("factor_demote_directional_score", -0.5)),
+        factor_quarantine_observations=int(strategy_lab_raw.get("factor_quarantine_observations", 40)),
+        factor_retire_after_quarantine_days=int(strategy_lab_raw.get("factor_retire_after_quarantine_days", 30)),
+        allow_formula_candidates=bool(strategy_lab_raw.get("allow_formula_candidates", True)),
     )
     market_bars = MarketBarsConfig(
         enabled=bool(market_bars_raw.get("enabled", True)),

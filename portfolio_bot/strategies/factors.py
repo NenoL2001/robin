@@ -14,6 +14,8 @@ class FactorSignal:
     value: float
     contribution: float
     evidence: str
+    status: str = "system"
+    shadow_contribution: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -73,6 +75,7 @@ def mine_semiconductor_factors(
     signals.extend(news_quality_factor_signals(quality_metrics, factor_weights))
     if portfolio_bonus:
         signals.append(FactorSignal("portfolio_context", portfolio_market_value, portfolio_bonus, f"{symbol.upper()} is in current portfolio exposure map"))
+    signals = apply_factor_lifecycle(signals, features)
 
     raw_score = sum(signal.contribution for signal in signals)
     score = max(0.0, min(100.0, raw_score))
@@ -334,6 +337,26 @@ def news_quality_factor_signals(metrics: dict[str, Any], weights: dict[str, Any]
     if age is not None and float(age) > 7:
         weight = abs(float(weights.get("evidence_freshness_decay", default_event_factor_weight("evidence_freshness_decay")) or -2.0))
         signals.append(FactorSignal("evidence_freshness_decay", float(age), -min(6.0, float(age) / 7.0 * weight), "stale evidence decays factor confidence"))
+    return signals
+
+
+def apply_factor_lifecycle(signals: list[FactorSignal], features: dict[str, Any]) -> list[FactorSignal]:
+    statuses = {str(key): str(value) for key, value in dict(features.get("factor_statuses") or {}).items()}
+    if not statuses:
+        return signals
+    for signal in signals:
+        status = statuses.get(signal.name, "system")
+        signal.status = status
+        if status == "candidate":
+            signal.shadow_contribution = signal.contribution
+            signal.contribution = 0.0
+            signal.evidence += "; candidate factor shadow-scored only"
+        elif status in {"quarantined", "retired"}:
+            signal.shadow_contribution = 0.0
+            signal.contribution = 0.0
+            signal.evidence += f"; excluded by factor lifecycle status={status}"
+        elif status == "active":
+            signal.shadow_contribution = signal.contribution
     return signals
 
 
