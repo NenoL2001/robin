@@ -1,0 +1,20 @@
+flowchart LR
+    legacy[portfolio_bot legacy entrypoints] --> compat[compatibility facade]
+    sources[Fixture/API sources] --> bronze[Bronze RawDocument parquet]
+    bronze --> silver[Silver CanonicalDocument]
+    silver --> entity[SecurityMaster entity linking]
+    entity --> news[Claim/Event pipeline]
+    news --> evidence[Gold EvidencePacket]
+    market[OHLCV local parquet/csv] --> ops[Op Registry pure local compute]
+    evidence --> ops
+    ops --> factors[Gold factor snapshots]
+    factors --> metrics[Factor metrics and FDR]
+    metrics --> miner[Candidate miner accepted/rejected]
+    evidence --> agent[Evidence-only agent analyzer]
+    factors --> agent
+    miner --> strategy[Champion/challenger selector]
+    strategy --> paper[Paper/canary decisions]
+    agent --> report[Constrained report renderer]
+    evidence --> audit[Lineage/audit log]
+    factors --> audit
+    strategy --> audit

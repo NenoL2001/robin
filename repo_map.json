@@ -1,0 +1,24 @@
+{
+  "legacy": {
+    "portfolio_bot": "Existing production-compatible monitor/report/paper trading package.",
+    "main.py": "Thin wrapper around portfolio_bot CLI.",
+    "strategy_skills": "Legacy strategy YAML and factor specs."
+  },
+  "vnext": {
+    "robin/contracts": "Pydantic contracts for documents, entities, events, claims, evidence, factors, backtests, decisions, ops.",
+    "robin/ingest": "Source registry, fetchers, dedupe, canonicalization, local DataLake.",
+    "robin/news": "Claim-level news/event/factor pipeline added for local evidence generation.",
+    "robin/features/ops": "Pure local op registry with cache and point-in-time contracts.",
+    "robin/metrics": "Rank IC, ICIR, quantile spread, turnover, significance and FDR helpers.",
+    "robin/miner": "Candidate factor acceptance/rejection loop.",
+    "robin/agent": "Evidence-only analysis contract and prompt renderer.",
+    "robin/backtest": "Simple local backtest, costs, CPCV/walk-forward interfaces.",
+    "robin/app/cli.py": "Typer CLI for vNext workflows."
+  },
+  "tests": {
+    "tests/unit": "Contract, ops, metrics, miner, agent and legacy unit tests.",
+    "tests/integration": "Evidence/news/strategy flow tests.",
+    "tests/replay": "Deterministic replay and no-forced-attribution tests.",
+    "tests/architecture": "Layering and raw-news boundary tests."
+  }
+}

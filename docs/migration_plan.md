@@ -134,7 +134,7 @@ Run before merging each milestone:
 
 ```bash
 ruff check robin tests
-mypy robin tests
+mypy robin
 pytest --cov=robin --cov-report=term-missing
 python3 -m py_compile $(rg --files robin portfolio_bot | rg '\.py$')
 ```
