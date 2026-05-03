@@ -8,6 +8,7 @@ venv/
 dist/
 build/
 *.egg-info/
+data/vnext/
 holdings.yaml
 analysts.yaml
 config.yaml

@@ -1,0 +1,1 @@
+"""Schema-based event extraction."""

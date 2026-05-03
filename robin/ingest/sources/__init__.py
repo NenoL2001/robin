@@ -1,0 +1,1 @@
+"""Configured source definitions."""

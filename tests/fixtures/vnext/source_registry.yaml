@@ -1,0 +1,8 @@
+sources:
+  - source_id: sandisk_ir_fixture
+    source_type: fixture
+    tier: P0
+    enabled: true
+    path: tests/fixtures/vnext/raw_news.json
+    metadata:
+      fallback: fixture

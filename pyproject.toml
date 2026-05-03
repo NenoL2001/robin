@@ -16,15 +16,37 @@ dependencies = [
   "websocket-client>=1.8.0",
   "langgraph>=0.2.60",
   "langgraph-checkpoint-sqlite>=3.0.0",
+  "pydantic>=2.0.0",
+  "polars>=1.0.0",
+  "pyarrow>=15.0.0",
+  "duckdb>=1.0.0",
+  "SQLAlchemy>=2.0.0",
+  "typer>=0.12.0",
+  "mlflow>=2.10.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0"]
+dev = ["pytest>=8.0.0", "pytest-cov>=5.0.0", "ruff>=0.6.0", "mypy>=1.8.0", "types-PyYAML>=6.0.12"]
 memory = ["mem0ai>=0.1.0"]
 
 [project.scripts]
 portfolio-bot = "portfolio_bot.cli:main"
+robin-vnext = "robin.app.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["portfolio_bot*", "robin*"]
+exclude = ["launchd*", "strategy_skills*", "system_skills*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["portfolio_bot", "portfolio_bot.*"]
+follow_imports = "skip"
+ignore_errors = true

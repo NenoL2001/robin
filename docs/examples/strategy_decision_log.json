@@ -1,0 +1,30 @@
+{
+  "action": "block",
+  "backtest_run_id": "backtest_example",
+  "created_at": "2026-05-03T00:00:00Z",
+  "decision_time": "2026-05-03T00:00:00Z",
+  "evidence_packet_ids": [
+    "evidence_example_sndk_q3"
+  ],
+  "factor_value_ids": [
+    "factorval_example_sndk_return_1d"
+  ],
+  "id": "decision_example_sndk",
+  "lineage": [
+    "evidence_example_sndk_q3",
+    "factorval_example_sndk_return_1d",
+    "backtest_example"
+  ],
+  "metadata": {
+    "example": true
+  },
+  "rationale": "selector consumed verified evidence packets and factor snapshots only",
+  "risk_checks": {
+    "blocked_reason": "max_notional_zero_or_unspecified",
+    "live_trading_disabled": true
+  },
+  "schema_version": "1.0.0",
+  "state": "paper",
+  "strategy_name": "vnext_champion",
+  "symbol": "SNDK"
+}

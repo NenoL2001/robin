@@ -1,0 +1,13 @@
+{
+  "documents": [
+    {
+      "id": "fixture-corrected-announcement",
+      "url": "https://example.com/corrected-announcement",
+      "title": "SNDK corrected outlook note",
+      "body": "SNDK corrected guidance timing language but confirmed revenue outperformance and data center HBF sampling.",
+      "published_time": "2026-05-01T15:00:00Z",
+      "event_time": "2026-05-01T15:00:00Z",
+      "ingested_time": "2026-05-01T15:04:00Z"
+    }
+  ]
+}

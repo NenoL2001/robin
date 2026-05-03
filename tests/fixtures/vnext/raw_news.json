@@ -1,0 +1,38 @@
+[
+  {
+    "id": "fixture-raw-sndk-q3",
+    "url": "https://investor.sandisk.com/node/7896/pdf",
+    "title": "SNDK Q3 FY2026 earnings beat and HBF roadmap update",
+    "body": "SNDK reported revenue outperformance and earnings beat versus guidance. Management raised outlook, cited data center demand, and said HBF customer sampling and ramp milestones accelerated.",
+    "published_time": "2026-04-30T20:30:00Z",
+    "event_time": "2026-04-30T20:00:00Z",
+    "ingested_time": "2026-05-01T00:00:00Z"
+  },
+  {
+    "id": "fixture-raw-lite-contract",
+    "url": "https://example.com/lite-1-6t-contract",
+    "title": "LITE customer agreement supports 1.6T product roadmap",
+    "body": "LITE announced a customer agreement for 1.6T optical products and described roadmap launch timing. The contract strengthens revenue visibility.",
+    "published_time": "2026-04-29T14:00:00Z",
+    "event_time": "2026-04-29T13:30:00Z",
+    "ingested_time": "2026-04-29T14:05:00Z"
+  },
+  {
+    "id": "fixture-raw-correction",
+    "url": "https://example.com/aaoi-corrected-guidance",
+    "title": "AAOI corrected guidance statement",
+    "body": "AAOI corrected a prior guidance statement and clarified that customer commitment language was preliminary, not a signed purchase order.",
+    "published_time": "2026-04-28T12:00:00Z",
+    "event_time": "2026-04-28T12:00:00Z",
+    "ingested_time": "2026-04-28T12:02:00Z"
+  },
+  {
+    "id": "fixture-raw-conflict",
+    "url": "https://example.com/litx-conflicting-claim",
+    "title": "LITX conflicting claim about exposure",
+    "body": "A conflicting and disputed guidance note said LITX had no relation to LITE despite issuer materials saying it provides 2x exposure to LITE.",
+    "published_time": "2026-04-27T10:00:00Z",
+    "event_time": "2026-04-27T10:00:00Z",
+    "ingested_time": "2026-04-27T10:05:00Z"
+  }
+]
