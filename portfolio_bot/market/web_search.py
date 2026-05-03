@@ -14,6 +14,7 @@ from ..memory import MemoryStore, memory_path
 from ..models import WebEvidence
 from ..runtime import RuntimeStore, runtime_path
 from .metrics import symbol_matches_text
+from .news_strategy import enrich_web_evidence
 
 
 class WebSearchProvider(Protocol):
@@ -136,7 +137,8 @@ class WebSearchService:
         except Exception as exc:
             self.runtime.record_log("WARNING", "web_search", "web_search", "web search failed", {"query": query, "error": str(exc), "provider": getattr(provider, "name", "")})
             return []
-        deduped = dedupe_web_evidence(results)
+        enriched = [enrich_web_evidence(item, symbols) for item in results]
+        deduped = dedupe_web_evidence(enriched)
         if commit:
             self._remember(query, deduped)
         return deduped

@@ -15,6 +15,7 @@ from ..models import NewsItem, WebEvidence
 from ..runtime import RuntimeStore, runtime_path
 from .exposures import leveraged_exposure
 from .metrics import COMMON_SYMBOL_ALIASES, symbol_matches_text
+from .news_strategy import build_news_query_plan, enrich_web_evidence
 from .web_search import WebSearchService, dedupe_web_evidence
 
 
@@ -159,7 +160,7 @@ class StrategyNewsScout:
         evidence: list[WebEvidence] = []
         if allow_external:
             for query in queries:
-                evidence.extend(self.web_search.search(query, symbols=normalized, commit=commit))
+                evidence.extend(enrich_web_evidence(item, normalized, query_context={"strategy": strategy_name, "query": query}) for item in self.web_search.search(query, symbols=normalized, commit=commit))
         if allow_external and self.config.research.web_search_enabled:
             evidence.extend(direct_product_evidence_for(normalized, timeout=self.config.research.web_search_timeout_seconds))
         evidence.extend(curated_evidence_for(normalized))
@@ -172,7 +173,10 @@ class StrategyNewsScout:
                     continue
                 queries.append(query)
                 if allow_external:
-                    evidence.extend(self.web_search.search(query, symbols=[*normalized, *related_symbols], commit=commit))
+                    evidence.extend(
+                        enrich_web_evidence(item, [*normalized, *related_symbols], query_context={"strategy": strategy_name, "query": query, "related_symbols": related_symbols})
+                        for item in self.web_search.search(query, symbols=[*normalized, *related_symbols], commit=commit)
+                    )
             evidence = dedupe_web_evidence(evidence)
             relationships = extract_symbol_relationships(evidence, normalized)
         events = extract_event_observations(evidence, normalized)
@@ -313,7 +317,16 @@ def build_strategy_queries(
         )
         if deep:
             queries.append(f"{symbol} SEC filing 10-Q risk factors business update {theme_text}")
-    return dedupe_strings(queries)[: max(1, max_queries)]
+    plan_queries = [
+        item.query
+        for item in build_news_query_plan(
+            symbols,
+            max_queries=max_queries,
+            official_sources_first=official_sources_first,
+            include_social=deep,
+        )
+    ]
+    return dedupe_strings([*queries, *plan_queries])[: max(1, max_queries)]
 
 
 def build_related_symbol_queries(symbols: list[str], *, themes: list[str], max_queries: int) -> list[str]:

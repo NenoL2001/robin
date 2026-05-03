@@ -82,6 +82,10 @@ def main(argv: list[str] | None = None) -> None:
     factor_iter_p = sub.add_parser("factor-iterate-now")
     factor_iter_p.add_argument("--dry-run", action="store_true")
 
+    factor_validate_p = sub.add_parser("factor-validate-now")
+    factor_validate_p.add_argument("--symbols", nargs="*", default=[])
+    factor_validate_p.add_argument("--dry-run", action="store_true")
+
     bars_refresh_p = sub.add_parser("bars-refresh-now")
     bars_refresh_p.add_argument("--symbols", nargs="*", default=[])
     bars_refresh_p.add_argument("--dry-run", action="store_true")
@@ -316,6 +320,12 @@ def main(argv: list[str] | None = None) -> None:
     elif args.command == "factor-iterate-now":
         result = ResearchEngine(config).iterate_strategy_factors(dry_run=args.dry_run)
         print(result.summary)
+    elif args.command == "factor-validate-now":
+        holdings = load_holdings(config.holdings_path)
+        symbols = args.symbols or sorted(research_symbols_for_cli(holdings) | set(config.research.default_universe))
+        result = ResearchEngine(config).validate_strategy_factor_flow(symbols, holdings=holdings, dry_run=args.dry_run)
+        print(result["validation_summary"])
+        print(json.dumps(result["validation"], ensure_ascii=False, indent=2, default=str))
     elif args.command == "bars-refresh-now":
         holdings = load_holdings(config.holdings_path)
         symbols = args.symbols or sorted(research_symbols_for_cli(holdings) | set(config.research.default_universe))

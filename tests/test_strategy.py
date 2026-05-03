@@ -115,6 +115,34 @@ def test_strategy_flags_ai_compute_macro_risks():
     assert "power bottleneck" in score.risk_flags
 
 
+def test_strategy_uses_news_quality_and_revision_factors():
+    strategy = SemiconductorReversalStrategy()
+    now = datetime.now(timezone.utc)
+    news = [
+        NewsItem(
+            title="SNDK earnings beat and analysts raise price target",
+            url="https://investor.sandisk.com/node/7896/pdf",
+            source="investor.sandisk.com",
+            published_at=now,
+            symbols=["SNDK"],
+            summary="Revenue was above guidance and analyst price target revisions followed the official release.",
+            raw={
+                "source_tier": "P0_official",
+                "event_types": ["earnings_surprise", "guidance_revision", "analyst_revision"],
+                "news_quality": [{"symbol": "SNDK", "score": 0.9, "reasons": ["P0_official"]}],
+            },
+        )
+    ]
+    quote = Quote(symbol="SNDK", price=117.0, timestamp=now, change_percent=3.0, previous_close=114.0, volume=1000)
+
+    score = strategy.evaluate("SNDK", quote, news)
+    factors = {row["name"]: row for row in score.metadata["factor_breakdown"]}
+
+    assert "news_quality_score" in factors
+    assert factors["news_quality_score"]["contribution"] > 0
+    assert "analyst_revision_breadth" in factors
+
+
 def test_long_call_filter_and_ranking():
     strategy = SemiconductorReversalStrategy(ResearchConfig(option_min_days=180, option_max_days=548, option_max_premium=1500))
     now = datetime.now(timezone.utc)

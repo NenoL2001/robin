@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import asdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from ..config import BotConfig
 from ..backtest import BacktestStore, format_backtest_result
@@ -22,14 +22,16 @@ from ..paper import PaperBroker
 from ..runtime import RuntimeStore, runtime_path
 from .relations import RelationGraph, StoredSymbolRelation, static_symbol_relations, stored_relation_from_scout
 from .report_verifier import ReportVerifier, fallback_verified_report
-from ..storage import Storage, load_analyst_config, load_holdings
+from ..storage import Storage, load_holdings
 from ..strategies.registry import load_strategies, load_strategy_infos
 from ..strategies.factor_attribution import FactorAttributionStore
 from ..strategies.risk_gate import RiskGateContext, StrategyRiskGate
 from .exposures import LEVERAGED_EXPOSURES, expand_leveraged_symbols, leveraged_exposure
 from .metrics import news_relevance, symbol_matches_text
 from .news_analysis import analyze_news_items, format_analyzed_news_section
+from .news_strategy import propose_factor_candidates_from_news
 from .strategy_news_scout import StrategyNewsScout, StrategyScoutResult, SymbolRelationship
+from ..strategies.factor_validation import validate_factor_flow
 from ..strategies.factor_specs import FactorSpecStore, iterate_factor_specs
 
 
@@ -209,6 +211,66 @@ class ResearchEngine:
 
     def iterate_strategy_factors(self, *, dry_run: bool = False):
         return iterate_factor_specs(self.config, dry_run=dry_run)
+
+    def validate_strategy_factor_flow(
+        self,
+        symbols: list[str] | None = None,
+        *,
+        holdings: list[Holding] | None = None,
+        dry_run: bool = True,
+    ):
+        holdings = holdings if holdings is not None else self.current_holdings
+        plan = self.generate_strategy_plan(symbols, holdings=holdings, dry_run=True)
+        specs = self.factor_specs.load()
+        if not specs:
+            specs = self.iterate_strategy_factors(dry_run=True).specs
+        existing_names = {item.name for item in specs}
+        digest = plan.get("digest", {}) if isinstance(plan.get("digest"), dict) else {}
+        digest_items = []
+        digest_rows = digest.get("items", []) if isinstance(digest, dict) else []
+        for row in digest_rows:
+            if not isinstance(row, dict):
+                continue
+            published = row.get("published_at")
+            published_at = None
+            if published:
+                try:
+                    published_at = datetime.fromisoformat(str(published).replace("Z", "+00:00"))
+                except ValueError:
+                    published_at = None
+            digest_items.append(
+                NewsItem(
+                    title=str(row.get("title", "")),
+                    url=str(row.get("url", "")),
+                    source=str(row.get("source", "")),
+                    published_at=published_at,
+                    symbols=[str(value) for value in row.get("symbols", []) or []],
+                    summary=str(row.get("summary", "")),
+                    kind=str(row.get("kind", "news")),
+                    raw=dict(row.get("raw", {}) or {}),
+                )
+            )
+        proposed = propose_factor_candidates_from_news(digest_items, existing_names)
+        attribution = self.factor_attribution.summary(horizon="1d", min_observations=1)
+        result = validate_factor_flow(
+            plan,
+            specs,
+            proposed_factors=proposed,
+            attribution_summary=attribution,
+            dry_run=dry_run,
+        )
+        if not dry_run:
+            self.memory.add(
+                "factor_flow_validation",
+                result.summary(),
+                symbol=",".join(symbols or []),
+                strategy="strategy_lab",
+                importance=0.7,
+                confidence=0.75,
+                source="factor_validation",
+                metadata=result.to_dict(),
+            )
+        return {"validation": result.to_dict(), "validation_summary": result.summary(), "plan_summary": plan.get("summary", "")}
 
     def generate_strategy_plan(
         self,

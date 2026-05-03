@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from ..models import NewsItem, Quote
@@ -55,6 +56,7 @@ def mine_semiconductor_factors(
     exposure = dict(features.get("exposure") or {})
     portfolio_market_value = float(exposure.get("market_value") or features.get("portfolio_market_value") or 0.0)
     portfolio_bonus = 2.0 if portfolio_market_value > 0 else 0.0
+    quality_metrics = news_quality_metrics(news)
 
     signals = [
         FactorSignal("base_prior", 1.0, 35.0, "starting prior for semiconductor reversal screen"),
@@ -68,6 +70,7 @@ def mine_semiconductor_factors(
     signals.extend(behavior_factor_signals(features, factor_weights))
     signals.extend(event_factor_signals(news, text, factor_weights))
     signals.extend(relationship_factor_signals(news, factor_weights))
+    signals.extend(news_quality_factor_signals(quality_metrics, factor_weights))
     if portfolio_bonus:
         signals.append(FactorSignal("portfolio_context", portfolio_market_value, portfolio_bonus, f"{symbol.upper()} is in current portfolio exposure map"))
 
@@ -150,6 +153,8 @@ def event_factor_signals(news: list[NewsItem], text: str, weights: dict[str, Any
         "hbf_ai_inference_moat": any(term in text for term in ("hbf", "high bandwidth flash", "bics8", "ai inference")),
         "official_source_strength": official_sources > 0,
         "sell_the_news_volatility": any(term in text for term in ("sell-the-news", "profit-taking", "parabolic", "volatility")),
+        "analyst_revision_breadth": any(term in text for term in ("upgrade", "downgrade", "price target", "estimate revision", "rating")),
+        "relationship_event_pass_through": any(isinstance(item.raw.get("relationship"), dict) for item in news if isinstance(item.raw, dict)),
     }
     signals: list[FactorSignal] = []
     for name, matched in inferred.items():
@@ -158,7 +163,10 @@ def event_factor_signals(news: list[NewsItem], text: str, weights: dict[str, Any
         weight = float(weights.get(name, default_event_factor_weight(name)) or 0.0)
         value = float(official_sources if name == "official_source_strength" else 1.0)
         evidence = "structured strategy evidence and configured factor spec"
-        signals.append(FactorSignal(name, value, weight, evidence))
+        contribution = weight
+        if name in {"relationship_event_pass_through"}:
+            contribution = min(abs(weight), value * abs(weight)) if weight >= 0 else -min(abs(weight), value * abs(weight))
+        signals.append(FactorSignal(name, value, contribution, evidence))
     return signals
 
 
@@ -174,6 +182,7 @@ def behavior_factor_signals(features: dict[str, Any], weights: dict[str, Any]) -
     return_5d = float(behavior.get("return_5d") or 0.0)
     relative_volume = float(behavior.get("relative_volume") or 0.0)
     close_location = float(behavior.get("close_location_value") or 0.5)
+    open_gap = float(behavior.get("open_gap_pct") or behavior.get("gap_from_previous_close_pct") or 0.0)
     flags = ", ".join(behavior.get("flags") or [])
     signals = [
         FactorSignal(
@@ -237,6 +246,25 @@ def behavior_factor_signals(features: dict[str, Any], weights: dict[str, Any]) -
                 "quote contained nonzero volume; stronger volume normalization needs historical bars",
             )
         )
+    if open_gap > 2.0 and close_location >= 0.65:
+        weight = float(weights.get("post_event_drift_followthrough", 0.4) or 0.0)
+        signals.append(
+            FactorSignal(
+                "post_event_drift_followthrough",
+                open_gap,
+                bounded(open_gap * weight + max(0.0, close_location - 0.5) * 2.0, 0.0, 6.0),
+                "gap held into a strong daily close location after local event/news flow",
+            )
+        )
+    if abs_move >= 8.0 and close_location < 0.4:
+        signals.append(
+            FactorSignal(
+                "liquidity_break_risk",
+                abs_move,
+                -min(8.0, abs(float(weights.get("liquidity_break_risk", -4.0) or -4.0)) * (0.45 - close_location + 0.5)),
+                "large move with weak close location increases reversal/liquidity air-pocket risk",
+            )
+        )
     return signals
 
 
@@ -261,6 +289,54 @@ def relationship_factor_signals(news: list[NewsItem], weights: dict[str, Any]) -
     ]
 
 
+def news_quality_metrics(news: list[NewsItem]) -> dict[str, Any]:
+    qualities: list[float] = []
+    tiers: set[str] = set()
+    sources: set[str] = set()
+    event_types: set[str] = set()
+    now = datetime.now(timezone.utc)
+    ages: list[float] = []
+    for item in news:
+        raw = item.raw or {}
+        tiers.add(str(raw.get("source_tier", "") or "UNSPECIFIED"))
+        if item.source:
+            sources.add(item.source.lower())
+        for event_type in raw.get("event_types", []) or []:
+            event_types.add(str(event_type))
+        for row in raw.get("news_quality", []) or []:
+            if isinstance(row, dict):
+                qualities.append(float(row.get("score") or 0.0))
+        if item.published_at:
+            published = item.published_at if item.published_at.tzinfo else item.published_at.replace(tzinfo=timezone.utc)
+            ages.append(max(0.0, (now - published).total_seconds() / 86400.0))
+    return {
+        "avg_quality": sum(qualities) / len(qualities) if qualities else 0.0,
+        "source_count": len(sources),
+        "tier_count": len({tier for tier in tiers if tier and tier != "UNSPECIFIED"}),
+        "event_types": sorted(event_types),
+        "freshest_age_days": min(ages) if ages else None,
+        "stale_count": sum(1 for age in ages if age > 14),
+    }
+
+
+def news_quality_factor_signals(metrics: dict[str, Any], weights: dict[str, Any]) -> list[FactorSignal]:
+    signals: list[FactorSignal] = []
+    avg_quality = float(metrics.get("avg_quality") or 0.0)
+    if avg_quality > 0:
+        weight = float(weights.get("news_quality_score", default_event_factor_weight("news_quality_score")) or 0.0)
+        signals.append(FactorSignal("news_quality_score", avg_quality, bounded(avg_quality * weight, 0.0, 6.0), "local evidence quality score from source tier, symbol match, events, citation, and freshness"))
+    source_count = int(metrics.get("source_count") or 0)
+    tier_count = int(metrics.get("tier_count") or 0)
+    if source_count >= 2 or tier_count >= 2:
+        weight = float(weights.get("source_diversity_confirmation", default_event_factor_weight("source_diversity_confirmation")) or 0.0)
+        signals.append(FactorSignal("source_diversity_confirmation", float(source_count), min(5.0, max(source_count, tier_count) * weight / 3.0), "independent source/tier diversity reduces single-source headline risk"))
+    age = metrics.get("freshest_age_days")
+    if age is not None and float(age) > 7:
+        weight = abs(float(weights.get("evidence_freshness_decay", default_event_factor_weight("evidence_freshness_decay")) or -2.0))
+        signals.append(FactorSignal("evidence_freshness_decay", float(age), -min(6.0, float(age) / 7.0 * weight), "stale evidence decays factor confidence"))
+    return signals
+
+
 def default_event_factor_weight(name: str) -> float:
     defaults = {
         "earnings_surprise": 14.0,
@@ -277,6 +353,13 @@ def default_event_factor_weight(name: str) -> float:
         "relative_volume_confirmation": 1.5,
         "close_location_quality": 2.0,
         "underlying_relation_strength": 8.0,
+        "news_quality_score": 5.0,
+        "evidence_freshness_decay": -2.0,
+        "source_diversity_confirmation": 3.0,
+        "analyst_revision_breadth": 4.0,
+        "relationship_event_pass_through": 4.5,
+        "post_event_drift_followthrough": 0.4,
+        "liquidity_break_risk": -4.0,
     }
     return defaults.get(name, 0.0)
 

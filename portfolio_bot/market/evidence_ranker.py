@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlparse
@@ -9,6 +9,7 @@ from ..config import BotConfig
 from ..memory import MemoryStore, memory_path
 from ..models import NewsItem
 from .metrics import generic_market_article, news_relevance, symbol_matches_text
+from .news_strategy import classify_source_tier, enrich_news_item, news_quality_score
 
 
 OFFICIAL_HOST_HINTS = {
@@ -70,7 +71,8 @@ class EvidenceRanker:
         ranked: list[RankedEvidence] = []
         seen_urls: set[str] = set()
         source_counts: dict[str, int] = {}
-        for item in news:
+        enriched_news = [enrich_news_item(item, normalized) for item in news]
+        for item in enriched_news:
             text = f"{item.title} {item.summary}"
             item_symbols = {symbol.upper() for symbol in item.symbols if symbol}
             matched = item_symbols & set(normalized)
@@ -148,26 +150,27 @@ class EvidenceRanker:
 
 
 def score_evidence(item: NewsItem, symbol: str) -> tuple[float, list[str]]:
+    quality_score, quality_reasons = news_quality_score(item, symbol)
     text = f"{item.title} {item.summary}"
     lowered = text.lower()
-    score = 0.18
-    reasons: list[str] = []
+    score = max(0.18, quality_score)
+    reasons: list[str] = list(quality_reasons)
     relevance = news_relevance(item, symbol)
-    score += relevance * 0.35
+    score += relevance * 0.12
     if relevance >= 0.7:
         reasons.append("strong_symbol_match")
     elif relevance >= 0.45:
         reasons.append("symbol_match")
-    tier = str((item.raw or {}).get("source_tier", "")).lower()
+    tier = str((item.raw or {}).get("source_tier", "") or classify_source_tier(item.url, item.source)).lower()
     host = source_host(item.url)
-    if tier == "official" or any(hint in host for hint in OFFICIAL_HOST_HINTS):
-        score += 0.25
+    if tier in {"official", "p0_official"} or any(hint in host for hint in OFFICIAL_HOST_HINTS):
+        score += 0.1
         reasons.append("official_or_primary")
-    elif tier in {"transcript", "issuer_or_profile"}:
-        score += 0.17
+    elif tier in {"transcript", "issuer_or_profile", "p1_transcript", "p2_profile_or_database"}:
+        score += 0.07
         reasons.append(tier)
-    elif tier in {"industry_media", "mainstream_finance"}:
-        score += 0.08
+    elif tier in {"industry_media", "mainstream_finance", "p1_industry_media", "p1_mainstream_finance"}:
+        score += 0.04
         reasons.append(tier)
     freshness = freshness_bonus(item.published_at)
     if freshness > 0:

@@ -158,6 +158,55 @@ DEFAULT_FACTOR_SPECS = [
         description="Inferred relationship from product/ETF/search evidence connecting a symbol to its economic underlying.",
         query_terms=["underlying", "2x long", "fund holdings", "ETF"],
     ),
+    FactorSpec(
+        "news_quality_score",
+        weight=5.0,
+        evidence_required=False,
+        description="Deterministic source-tier, symbol-match, event, citation, and freshness quality score for evidence.",
+        query_terms=["official source", "evidence quality", "fresh citation"],
+    ),
+    FactorSpec(
+        "evidence_freshness_decay",
+        direction="negative",
+        weight=-2.0,
+        evidence_required=False,
+        description="Penalizes stale evidence so old headlines do not keep driving current signals.",
+        query_terms=["freshness", "stale evidence", "event decay"],
+    ),
+    FactorSpec(
+        "source_diversity_confirmation",
+        weight=3.0,
+        evidence_required=False,
+        description="Rewards independent confirmation across official, transcript, finance, and industry sources.",
+        query_terms=["source diversity", "independent confirmation"],
+    ),
+    FactorSpec(
+        "analyst_revision_breadth",
+        weight=4.0,
+        description="Estimate, rating, or price-target revision breadth after confirmed events.",
+        query_terms=["upgrade", "price target", "estimate revision", "rating"],
+    ),
+    FactorSpec(
+        "relationship_event_pass_through",
+        weight=4.5,
+        description="Event pass-through from economic underlying to leveraged ETF/single-stock product exposure.",
+        query_terms=["underlying event", "2x exposure", "read-through"],
+    ),
+    FactorSpec(
+        "post_event_drift_followthrough",
+        weight=0.4,
+        evidence_required=False,
+        description="Local price follow-through after verified events; helps distinguish sustained repricing from one-day spikes.",
+        query_terms=["post-event drift", "follow-through"],
+    ),
+    FactorSpec(
+        "liquidity_break_risk",
+        direction="negative",
+        weight=-4.0,
+        evidence_required=False,
+        description="Penalizes high-volatility moves with weak close location, poor volume, or likely liquidity air pockets.",
+        query_terms=["liquidity risk", "reversal", "close location"],
+    ),
 ]
 
 

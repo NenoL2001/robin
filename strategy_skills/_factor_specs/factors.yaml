@@ -1,3 +1,18 @@
+- name: analyst_revision_breadth
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 4.0
+  min_observations_for_orders: 20
+  evidence_required: true
+  description: Estimate, rating, or price-target revision breadth after confirmed
+    events.
+  query_terms:
+  - upgrade
+  - price target
+  - estimate revision
+  - rating
+  updated_at: '2026-05-03T04:54:21.220458+00:00'
 - name: bar_momentum_5d
   version: 1.0.0
   status: candidate
@@ -65,6 +80,20 @@
   - EPS
   - revenue
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: evidence_freshness_decay
+  version: 1.0.0
+  status: candidate
+  direction: negative
+  weight: -2.0
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Penalizes stale evidence so old headlines do not keep driving current
+    signals.
+  query_terms:
+  - freshness
+  - stale evidence
+  - event decay
+  updated_at: '2026-05-03T04:54:21.220458+00:00'
 - name: guidance_revision
   version: 1.0.0
   status: candidate
@@ -124,6 +153,34 @@
   - reversal risk
   - large move
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: liquidity_break_risk
+  version: 1.0.0
+  status: candidate
+  direction: negative
+  weight: -4.0
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Penalizes high-volatility moves with weak close location, poor volume,
+    or likely liquidity air pockets.
+  query_terms:
+  - liquidity risk
+  - reversal
+  - close location
+  updated_at: '2026-05-03T04:54:21.220458+00:00'
+- name: news_quality_score
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 5.0
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Deterministic source-tier, symbol-match, event, citation, and freshness
+    quality score for evidence.
+  query_terms:
+  - official source
+  - evidence quality
+  - fresh citation
+  updated_at: '2026-05-03T04:54:21.220458+00:00'
 - name: official_source_strength
   version: 1.0.0
   status: candidate
@@ -153,6 +210,19 @@
   - crowding
   - exposure
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: post_event_drift_followthrough
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 0.4
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Local price follow-through after verified events; helps distinguish
+    sustained repricing from one-day spikes.
+  query_terms:
+  - post-event drift
+  - follow-through
+  updated_at: '2026-05-03T04:54:21.220458+00:00'
 - name: product_roadmap_acceleration
   version: 1.0.0
   status: candidate
@@ -167,6 +237,20 @@
   - ramp
   - roadmap
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: relationship_event_pass_through
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 4.5
+  min_observations_for_orders: 20
+  evidence_required: true
+  description: Event pass-through from economic underlying to leveraged ETF/single-stock
+    product exposure.
+  query_terms:
+  - underlying event
+  - 2x exposure
+  - read-through
+  updated_at: '2026-05-03T04:54:21.220458+00:00'
 - name: relative_volume_confirmation
   version: 1.0.0
   status: candidate
@@ -194,6 +278,19 @@
   - parabolic
   - volatility
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+- name: source_diversity_confirmation
+  version: 1.0.0
+  status: candidate
+  direction: positive
+  weight: 3.0
+  min_observations_for_orders: 20
+  evidence_required: false
+  description: Rewards independent confirmation across official, transcript, finance,
+    and industry sources.
+  query_terms:
+  - source diversity
+  - independent confirmation
+  updated_at: '2026-05-03T04:54:21.220458+00:00'
 - name: underlying_relation_strength
   version: 1.0.0
   status: candidate
