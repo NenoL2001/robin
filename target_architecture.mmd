@@ -1,0 +1,61 @@
+flowchart LR
+    subgraph Sources["External Sources"]
+        Market["Market bars / quotes"]
+        Filings["Filings / IR / PR"]
+        Media["News / media / broad recall"]
+    end
+
+    subgraph Data["Local Data Lake"]
+        Bronze["Bronze raw documents and raw market data"]
+        Silver["Silver canonical documents and tables"]
+        Entity["Entity master: ticker, aliases, CIK/FIGI-ready ids, industry"]
+        Gold["Gold features, factors, evidence packets"]
+    end
+
+    subgraph Research["Research Core"]
+        Ops["Op registry: versioned, cached, PIT-safe ops"]
+        Facts["Claim / event extraction and verification"]
+        Metrics["Factor metrics: IC, ICIR, spread, turnover, q-value"]
+        Miner["Candidate miner and accept/reject gate"]
+        Backtest["Replay and backtest artifacts"]
+    end
+
+    subgraph Agent["Agent And Reports"]
+        Context["Evidence bundle builder"]
+        Analyzer["Evidence-only analyzer"]
+        Report["Constrained report renderer"]
+        Risk["Paper-only risk and execution reports"]
+    end
+
+    subgraph Observability["Observability"]
+        Lineage["Lineage events"]
+        MLflow["MLflow or local fallback artifacts"]
+        Tests["Unit, integration, replay, architecture tests"]
+    end
+
+    Market --> Bronze
+    Filings --> Bronze
+    Media --> Bronze
+    Bronze --> Silver
+    Silver --> Entity
+    Silver --> Facts
+    Entity --> Facts
+    Silver --> Ops
+    Entity --> Ops
+    Ops --> Gold
+    Facts --> Gold
+    Gold --> Metrics
+    Metrics --> Miner
+    Gold --> Backtest
+    Miner --> Backtest
+    Gold --> Context
+    Backtest --> Context
+    Context --> Analyzer
+    Analyzer --> Report
+    Context --> Report
+    Report --> Risk
+    Bronze --> Lineage
+    Silver --> Lineage
+    Gold --> Lineage
+    Backtest --> MLflow
+    Lineage --> Tests

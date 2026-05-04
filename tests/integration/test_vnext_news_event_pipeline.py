@@ -58,3 +58,38 @@ def test_no_official_confirmation_stays_insufficient_evidence():
     )
     assert result.factor_frame.get_column("event_factor_value").max() == 0
     assert result.factor_frame.get_column("candidate_event_value").max() > 0
+
+
+def test_independent_p1_sources_corroborate_same_claim():
+    documents = [
+        RawDocument(
+            source_id="reputable_media_a",
+            source_tier=SourceTier.P1,
+            url="https://example.com/a",
+            title="SNDK wins multiyear customer agreement",
+            body="SNDK announced a multiyear customer agreement for data center storage.",
+            event_time=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            published_time=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        ),
+        RawDocument(
+            source_id="reputable_media_b",
+            source_tier=SourceTier.P1,
+            url="https://example.com/b",
+            title="SNDK customer win expands data center agreement",
+            body="SNDK confirmed a customer win and agreement tied to data center demand.",
+            event_time=datetime(2026, 5, 1, tzinfo=timezone.utc),
+            published_time=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        ),
+    ]
+
+    result = build_news_event_pipeline(
+        documents, SecurityMaster.from_csv(FIXTURES / "security_master.csv")
+    )
+
+    assert {packet.verification_status for packet in result.packets} == {
+        VerificationStatus.VERIFIED
+    }
+    assert min(claim.attributes["corroboration_count"] for claim in result.claims) == 2
+    assert len({claim.attributes["event_cluster_id"] for claim in result.claims}) == 1
+    assert result.factor_frame.get_column("event_cluster_id").n_unique() == 1
+    assert result.factor_frame.get_column("event_factor_value").max() > 0.75

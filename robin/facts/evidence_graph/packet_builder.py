@@ -29,7 +29,7 @@ def build_evidence_packet(
     return EvidencePacket(
         id=packet_id,
         canonical_document_id=document.id,
-        entity_ids=[entity.id for entity in entities],
+        entity_ids=[entity.security_id for entity in entities],
         event_ids=[event.id for event in events],
         claim_ids=[claim.id for claim in claims],
         evidence_score=score,

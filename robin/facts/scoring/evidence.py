@@ -11,7 +11,7 @@ def evidence_score(source_tier: SourceTier, claims: list[ClaimRecord]) -> tuple[
         return 0.0, ["no_claims"]
     verified = sum(1 for claim in claims if claim.verification_status == VerificationStatus.VERIFIED)
     conflicted = sum(1 for claim in claims if claim.verification_status == VerificationStatus.CONFLICTED)
-    score += min(0.08, verified * 0.02)
+    score += min(0.12, verified * 0.04)
     if conflicted:
         score -= 0.3
         flags.append("conflicting_claims")

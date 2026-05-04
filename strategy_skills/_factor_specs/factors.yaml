@@ -13,6 +13,16 @@
   - estimate revision
   - rating
   updated_at: '2026-05-03T04:54:21.220458+00:00'
+  formula_ref: builtin.analyst_revision_breadth
+  formula_version: 1.0.0
+  formula_hash: 3dc84e6f8e67615b
+  source: legacy_yaml
+  created_at: '2026-05-03T04:54:21.220458+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: bar_momentum_5d
   version: 1.0.0
   status: candidate
@@ -26,6 +36,16 @@
   - 5d return
   - trend
   updated_at: '2026-05-02T23:12:26.457770+00:00'
+  formula_ref: builtin.bar_momentum_5d
+  formula_version: 1.0.0
+  formula_hash: e8c6cbeb8f438d40
+  source: legacy_yaml
+  created_at: '2026-05-02T23:12:26.457770+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: close_location_quality
   version: 1.0.0
   status: candidate
@@ -39,6 +59,16 @@
   - close location
   - range position
   updated_at: '2026-05-02T23:12:26.457770+00:00'
+  formula_ref: builtin.close_location_quality
+  formula_version: 1.0.0
+  formula_hash: 64d7fcc8a832d2ec
+  source: legacy_yaml
+  created_at: '2026-05-02T23:12:26.457770+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: contracted_revenue_visibility
   version: 1.0.0
   status: candidate
@@ -53,6 +83,16 @@
   - financial guarantee
   - prepayment
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.contracted_revenue_visibility
+  formula_version: 1.0.0
+  formula_hash: c78fb99ee6e79f69
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: datacenter_mix_shift
   version: 1.0.0
   status: candidate
@@ -66,6 +106,16 @@
   - data center
   - AI infrastructure
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.datacenter_mix_shift
+  formula_version: 1.0.0
+  formula_hash: 4677b6cf6bf807d9
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: earnings_surprise
   version: 1.0.0
   status: candidate
@@ -80,6 +130,16 @@
   - EPS
   - revenue
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.earnings_surprise
+  formula_version: 1.0.0
+  formula_hash: 2d356c765ffab2be
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: evidence_freshness_decay
   version: 1.0.0
   status: candidate
@@ -94,6 +154,16 @@
   - stale evidence
   - event decay
   updated_at: '2026-05-03T04:54:21.220458+00:00'
+  formula_ref: builtin.evidence_freshness_decay
+  formula_version: 1.0.0
+  formula_hash: 9505be625145979d
+  source: legacy_yaml
+  created_at: '2026-05-03T04:54:21.220458+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: guidance_revision
   version: 1.0.0
   status: candidate
@@ -109,6 +179,16 @@
   - Q4 guide
   - raises guidance
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.guidance_revision
+  formula_version: 1.0.0
+  formula_hash: 1de7337e895ccf6f
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: hbf_ai_inference_moat
   version: 1.0.0
   status: candidate
@@ -125,6 +205,16 @@
   - Stargate
   - AI inference
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.hbf_ai_inference_moat
+  formula_version: 1.0.0
+  formula_hash: 4fc1ba818f1ac8a6
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: intraday_followthrough
   version: 1.0.0
   status: candidate
@@ -139,6 +229,16 @@
   - follow-through
   - price behavior
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.intraday_followthrough
+  formula_version: 1.0.0
+  formula_hash: 97a7b3dfa8e239c6
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: large_move_reversal_risk
   version: 1.0.0
   status: candidate
@@ -153,6 +253,16 @@
   - reversal risk
   - large move
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.large_move_reversal_risk
+  formula_version: 1.0.0
+  formula_hash: 6ee6a2a1b4e170f1
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: liquidity_break_risk
   version: 1.0.0
   status: candidate
@@ -167,6 +277,16 @@
   - reversal
   - close location
   updated_at: '2026-05-03T04:54:21.220458+00:00'
+  formula_ref: builtin.liquidity_break_risk
+  formula_version: 1.0.0
+  formula_hash: 296d234871779897
+  source: legacy_yaml
+  created_at: '2026-05-03T04:54:21.220458+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: news_quality_score
   version: 1.0.0
   status: candidate
@@ -181,6 +301,16 @@
   - evidence quality
   - fresh citation
   updated_at: '2026-05-03T04:54:21.220458+00:00'
+  formula_ref: builtin.news_quality_score
+  formula_version: 1.0.0
+  formula_hash: e9021adc3d44d5aa
+  source: legacy_yaml
+  created_at: '2026-05-03T04:54:21.220458+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: official_source_strength
   version: 1.0.0
   status: candidate
@@ -196,6 +326,16 @@
   - press release
   - fact sheet
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.official_source_strength
+  formula_version: 1.0.0
+  formula_hash: 919f87978b171411
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: position_crowding_pressure
   version: 1.0.0
   status: candidate
@@ -210,6 +350,16 @@
   - crowding
   - exposure
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.position_crowding_pressure
+  formula_version: 1.0.0
+  formula_hash: 493896a688cc907f
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: post_event_drift_followthrough
   version: 1.0.0
   status: candidate
@@ -223,6 +373,16 @@
   - post-event drift
   - follow-through
   updated_at: '2026-05-03T04:54:21.220458+00:00'
+  formula_ref: builtin.post_event_drift_followthrough
+  formula_version: 1.0.0
+  formula_hash: a9f5ad01d6b269ab
+  source: legacy_yaml
+  created_at: '2026-05-03T04:54:21.220458+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: product_roadmap_acceleration
   version: 1.0.0
   status: candidate
@@ -237,6 +397,16 @@
   - ramp
   - roadmap
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.product_roadmap_acceleration
+  formula_version: 1.0.0
+  formula_hash: b428a997b83e2aaa
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: relationship_event_pass_through
   version: 1.0.0
   status: candidate
@@ -251,6 +421,16 @@
   - 2x exposure
   - read-through
   updated_at: '2026-05-03T04:54:21.220458+00:00'
+  formula_ref: builtin.relationship_event_pass_through
+  formula_version: 1.0.0
+  formula_hash: de838e5b077aa885
+  source: legacy_yaml
+  created_at: '2026-05-03T04:54:21.220458+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: relative_volume_confirmation
   version: 1.0.0
   status: candidate
@@ -263,6 +443,16 @@
   - relative volume
   - volume breakout
   updated_at: '2026-05-02T23:12:26.457770+00:00'
+  formula_ref: builtin.relative_volume_confirmation
+  formula_version: 1.0.0
+  formula_hash: 8a44af29dc243730
+  source: legacy_yaml
+  created_at: '2026-05-02T23:12:26.457770+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: sell_the_news_volatility
   version: 1.0.0
   status: candidate
@@ -278,6 +468,16 @@
   - parabolic
   - volatility
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.sell_the_news_volatility
+  formula_version: 1.0.0
+  formula_hash: 6d23edc486c7a223
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: source_diversity_confirmation
   version: 1.0.0
   status: candidate
@@ -291,6 +491,16 @@
   - source diversity
   - independent confirmation
   updated_at: '2026-05-03T04:54:21.220458+00:00'
+  formula_ref: builtin.source_diversity_confirmation
+  formula_version: 1.0.0
+  formula_hash: 90e6fac6ecaa7be3
+  source: legacy_yaml
+  created_at: '2026-05-03T04:54:21.220458+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: underlying_relation_strength
   version: 1.0.0
   status: candidate
@@ -306,6 +516,16 @@
   - fund holdings
   - ETF
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.underlying_relation_strength
+  formula_version: 1.0.0
+  formula_hash: 203d56a67a9e1049
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
 - name: volume_confirmation
   version: 1.0.0
   status: candidate
@@ -319,3 +539,13 @@
   - volume
   - confirmation
   updated_at: '2026-05-02T20:30:55.650309+00:00'
+  formula_ref: builtin.volume_confirmation
+  formula_version: 1.0.0
+  formula_hash: 99e401f64078d07d
+  source: legacy_yaml
+  created_at: '2026-05-02T20:30:55.650309+00:00'
+  retired_at: ''
+  reason: ''
+  last_evaluated_at: ''
+  negative_streak: 0
+  positive_streak: 0
